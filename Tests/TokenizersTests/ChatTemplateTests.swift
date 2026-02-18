@@ -1,9 +1,31 @@
 // Copyright © Hugging Face SAS
+// Copyright © Anthony DePasquale
 
 import Foundation
+import HuggingFace
 import Testing
 
 @testable import Tokenizers
+
+private let downloadDestination: URL = {
+    let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+    return base.appending(component: "huggingface-chat-template-tests")
+}()
+
+private let hubClient = HubClient()
+private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
+private let tokenizerAndChatTemplateFiles = [
+    "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", "chat_template.json",
+]
+
+private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
+    let modelDirectory = try await hubClient.downloadSnapshot(
+        of: model,
+        to: downloadDestination.appending(path: "\(model)"),
+        matching: matching
+    )
+    return try await AutoTokenizer.from(modelDirectory: modelDirectory)
+}
 
 @Suite("Chat Template Tests")
 struct ChatTemplateTests {
@@ -16,7 +38,7 @@ struct ChatTemplateTests {
 
     @MainActor
     static let phiTokenizerTask = Task {
-        try await AutoTokenizer.from(pretrained: "microsoft/Phi-3-mini-128k-instruct")
+        try await makeTokenizer(model: "microsoft/Phi-3-mini-128k-instruct")
     }
 
     static func sharedPhiTokenizer() async throws -> Tokenizer {
@@ -25,7 +47,7 @@ struct ChatTemplateTests {
 
     @MainActor
     static let tokenizerWithTemplateArrayTask = Task {
-        try await AutoTokenizer.from(pretrained: "mlx-community/Mistral-7B-Instruct-v0.3-4bit")
+        try await makeTokenizer(model: "mlx-community/Mistral-7B-Instruct-v0.3-4bit")
     }
 
     static func sharedTokenizerWithTemplateArray() async throws -> Tokenizer {
@@ -45,8 +67,7 @@ struct ChatTemplateTests {
 
     @Test("DeepSeek Qwen chat template formatting", .disabled("Disabled due to race condition with TokenizerTests.deepSeekPostProcessor"))
     func deepSeekQwenChatTemplate() async throws {
-        let tokenizer = try await AutoTokenizer.from(
-            pretrained: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+        let tokenizer = try await makeTokenizer(model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
         #expect(tokenizer.hasChatTemplate)
 
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
@@ -127,7 +148,7 @@ struct ChatTemplateTests {
     /// https://github.com/huggingface/swift-transformers/issues/210
     @Test("Repeated emojis handling")
     func repeatedEmojis() async throws {
-        let tokenizer = try await AutoTokenizer.from(pretrained: "Qwen/Qwen3-0.6B")
+        let tokenizer = try await makeTokenizer(model: "Qwen/Qwen3-0.6B")
 
         let testMessages: [[String: String]] = [
             [
@@ -148,7 +169,10 @@ struct ChatTemplateTests {
     @Test("Jinja-only template files")
     func jinjaOnlyTemplate() async throws {
         // Repo only contains .jinja file, no chat_template.json
-        let tokenizer = try await AutoTokenizer.from(pretrained: "FL33TW00D-HF/jinja-test")
+        let tokenizer = try await makeTokenizer(
+            model: "FL33TW00D-HF/jinja-test",
+            matching: tokenizerAndChatTemplateFiles
+        )
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
         let encodedTarget = [151643, 151669, 74785, 279, 23670, 15473, 4128, 13, 151670]
         let decoded = tokenizer.decode(tokens: encoded)
@@ -160,8 +184,7 @@ struct ChatTemplateTests {
 
     @Test("Qwen 2.5 with tools functionality")
     func qwen2_5WithTools() async throws {
-        let tokenizer = try await AutoTokenizer.from(
-            pretrained: "mlx-community/Qwen2.5-7B-Instruct-4bit")
+        let tokenizer = try await makeTokenizer(model: "mlx-community/Qwen2.5-7B-Instruct-4bit")
         #expect(tokenizer.hasChatTemplate)
 
         let weatherQueryMessages: [[String: String]] = [
@@ -284,11 +307,15 @@ struct ChatTemplateTests {
                 ] as [String: Any]
             ] as [[String: Any]]
         // Qwen 2 VL does not have a chat_template.json file. The chat template is in tokenizer_config.json.
-        let qwen2VLTokenizer = try await AutoTokenizer.from(
-            pretrained: "mlx-community/Qwen2-VL-7B-Instruct-4bit")
+        let qwen2VLTokenizer = try await makeTokenizer(
+            model: "mlx-community/Qwen2-VL-7B-Instruct-4bit",
+            matching: tokenizerAndChatTemplateFiles
+        )
         // Qwen 2.5 VL has a chat_template.json file with a different chat template than the one in tokenizer_config.json.
-        let qwen2_5VLTokenizer = try await AutoTokenizer.from(
-            pretrained: "mlx-community/Qwen2.5-VL-7B-Instruct-4bit")
+        let qwen2_5VLTokenizer = try await makeTokenizer(
+            model: "mlx-community/Qwen2.5-VL-7B-Instruct-4bit",
+            matching: tokenizerAndChatTemplateFiles
+        )
         let qwen2VLEncoded = try qwen2VLTokenizer.applyChatTemplate(messages: visionMessages)
         let qwen2VLDecoded = qwen2VLTokenizer.decode(tokens: qwen2VLEncoded)
         let qwen2_5VLEncoded = try qwen2_5VLTokenizer.applyChatTemplate(messages: visionMessages)
@@ -308,7 +335,7 @@ struct ChatTemplateTests {
 
     @Test("Apply template error handling")
     func applyTemplateError() async throws {
-        let tokenizer = try await AutoTokenizer.from(pretrained: "google-bert/bert-base-chinese")
+        let tokenizer = try await makeTokenizer(model: "google-bert/bert-base-chinese")
         #expect(!tokenizer.hasChatTemplate)
 
         #expect(throws: TokenizerError.self) {

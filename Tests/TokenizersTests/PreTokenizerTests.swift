@@ -1,7 +1,6 @@
 // Copyright © Hugging Face SAS
 
 import Foundation
-import Hub
 import Testing
 
 @testable import Tokenizers

@@ -3,10 +3,9 @@
 // Based on GPT2TokenizerTests by Julien Chaumond.
 
 import Foundation
+import HuggingFace
 import Testing
 
-@testable import Hub
-@testable import Models
 @testable import Tokenizers
 
 private let downloadDestination: URL = {
@@ -14,7 +13,7 @@ private let downloadDestination: URL = {
     return base.appending(component: "huggingface-tests")
 }()
 
-private let hubApiForTests = HubApi(downloadBase: downloadDestination)
+private let hubClient = HubClient()
 
 private enum TestError: Error { case unsupportedTokenizer }
 
@@ -56,8 +55,22 @@ private func loadEdgeCases(for hubModelName: String) throws -> [EdgeCase]? {
     return cases[hubModelName]
 }
 
-private func makeTokenizer(hubModelName: String, hubApi: HubApi) async throws -> PreTrainedTokenizer {
-    let tokenizer = try await AutoTokenizer.from(pretrained: hubModelName, hubApi: hubApi)
+private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
+
+private func downloadModel(_ modelName: String) async throws -> URL {
+    guard let repoId = Repo.ID(rawValue: modelName) else {
+        throw TestError.unsupportedTokenizer
+    }
+    return try await hubClient.downloadSnapshot(
+        of: repoId,
+        to: downloadDestination.appending(path: modelName),
+        matching: tokenizerFiles
+    )
+}
+
+private func makeTokenizer(hubModelName: String) async throws -> PreTrainedTokenizer {
+    let modelDirectory = try await downloadModel(hubModelName)
+    let tokenizer = try await AutoTokenizer.from(modelDirectory: modelDirectory)
     guard let pretrained = tokenizer as? PreTrainedTokenizer else {
         throw TestError.unsupportedTokenizer
     }
@@ -84,20 +97,20 @@ struct ModelSpec: Sendable, CustomStringConvertible {
 
 // MARK: -
 
-@Suite("Tokenizer Tests")
+@Suite("Tokenizer Tests", .serialized)
 struct TokenizerTests {
     @Test(arguments: [
         ModelSpec("coreml-projects/Llama-2-7b-chat-coreml", "llama_encoded", 0),
         ModelSpec("distilbert/distilbert-base-multilingual-cased", "distilbert_cased_encoded", 100),
-        ModelSpec("distilgpt2", "gpt2_encoded_tokens", 50256),
+        ModelSpec("distilbert/distilgpt2", "gpt2_encoded_tokens"),
         ModelSpec("openai/whisper-large-v2", "whisper_large_v2_encoded", 50257),
         ModelSpec("openai/whisper-tiny.en", "whisper_tiny_en_encoded", 50256),
         ModelSpec("pcuenq/Llama-3.2-1B-Instruct-tokenizer", "llama_3.2_encoded"),
-        ModelSpec("t5-base", "t5_base_encoded", 2),
+        ModelSpec("google-t5/t5-base", "t5_base_encoded", 2),
         ModelSpec("tiiuae/falcon-7b", "falcon_encoded"),
     ])
     func tokenizer(spec: ModelSpec) async throws {
-        let tokenizer = try await makeTokenizer(hubModelName: spec.hubModelName, hubApi: hubApiForTests)
+        let tokenizer = try await makeTokenizer(hubModelName: spec.hubModelName)
         let dataset = try loadDataset(filename: spec.encodedSamplesFilename)
 
         #expect(tokenizer.tokenize(text: dataset.text) == dataset.bpe_tokens)
@@ -126,14 +139,15 @@ struct TokenizerTests {
 
     @Test
     func gemmaUnicode() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "pcuenq/gemma-tokenizer") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("pcuenq/gemma-tokenizer")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
         // These are two different characters
         let cases = [
-            "à", // 0x61 0x300
-            "à", // 0xe0
+            "\u{0061}\u{0300}", // NFD: a + combining grave accent
+            "\u{00E0}", // NFC: precomposed à
         ]
         let expected = [217138, 1305]
         for (s, expected) in zip(cases, expected) {
@@ -159,7 +173,8 @@ struct TokenizerTests {
 
     @Test
     func phi4() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "microsoft/phi-4") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("microsoft/phi-4")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -169,7 +184,7 @@ struct TokenizerTests {
     }
 
     @Test
-    func tokenizerFromLocalFolder() async throws {
+    func tokenizerFromLocalDirectory() async throws {
         let bundle = Bundle.module
         guard
             let tokenizerConfigURL = bundle.url(
@@ -185,9 +200,7 @@ struct TokenizerTests {
             return
         }
 
-        let tokenizer = try await AutoTokenizer.from(
-            modelFolder: tokenizerConfigURL.deletingLastPathComponent()
-        )
+        let tokenizer = try await AutoTokenizer.from(modelDirectory: tokenizerConfigURL.deletingLastPathComponent())
 
         let encoded = tokenizer.encode(text: "offline path")
         #expect(!encoded.isEmpty)
@@ -196,7 +209,8 @@ struct TokenizerTests {
     /// https://github.com/huggingface/swift-transformers/issues/96
     @Test
     func legacyLlamaBehaviour() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "mlx-community/Phi-3-mini-4k-instruct-4bit-no-q-embed") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("mlx-community/Phi-3-mini-4k-instruct-4bit-no-q-embed")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -207,7 +221,8 @@ struct TokenizerTests {
     /// https://github.com/huggingface/swift-transformers/issues/99
     @Test
     func robertaXLMTokenizer() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "intfloat/multilingual-e5-small") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("intfloat/multilingual-e5-small")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -218,15 +233,17 @@ struct TokenizerTests {
 
     @Test
     func nllbTokenizer() async throws {
+        let modelDirectory = try await downloadModel("Xenova/nllb-200-distilled-600M")
+
         do {
-            _ = try await AutoTokenizer.from(pretrained: "Xenova/nllb-200-distilled-600M")
-            Issue.record("Expected AutoTokenizer.from to throw for strict mode")
+            _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
+            Issue.record("Expected Tokenizer.from to throw for strict mode")
         } catch {
             // Expected to throw in normal (strict) mode
         }
 
         // no strict mode proceeds
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "Xenova/nllb-200-distilled-600M", strict: false) as? PreTrainedTokenizer
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory, strict: false) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -238,7 +255,8 @@ struct TokenizerTests {
     /// Deepseek needs a post-processor override to add a bos token as in the reference implementation
     @Test
     func deepSeekPostProcessor() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
         #expect(tokenizer.encode(text: "Who are you?") == [151646, 15191, 525, 498, 30])
@@ -247,31 +265,24 @@ struct TokenizerTests {
     /// Some Llama tokenizers already use a bos-prepending Template post-processor
     @Test
     func llamaPostProcessor() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "coreml-projects/Llama-2-7b-chat-coreml") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("coreml-projects/Llama-2-7b-chat-coreml")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
         #expect(tokenizer.encode(text: "Who are you?") == [1, 11644, 526, 366, 29973])
     }
 
     @Test
-    func localTokenizerFromPretrained() async throws {
-        let downloadDestination: URL = {
-            let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            return base.appending(component: "hf-local-pretrained-tests-downloads")
-        }()
-
-        let hubApi = HubApi(downloadBase: downloadDestination)
-        let downloadedTo = try await hubApi.snapshot(from: "pcuenq/gemma-tokenizer")
-
-        let tokenizerOpt = try await AutoTokenizer.from(modelFolder: downloadedTo) as? PreTrainedTokenizer
+    func localTokenizerFromDownload() async throws {
+        let modelDirectory = try await downloadModel("pcuenq/gemma-tokenizer")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
-
-        try FileManager.default.removeItem(at: downloadDestination)
     }
 
     @Test
     func bertCased() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "distilbert/distilbert-base-multilingual-cased") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("distilbert/distilbert-base-multilingual-cased")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -281,7 +292,8 @@ struct TokenizerTests {
 
     @Test
     func bertCasedResaved() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "pcuenq/distilbert-base-multilingual-cased-tokenizer") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("pcuenq/distilbert-base-multilingual-cased-tokenizer")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -290,7 +302,8 @@ struct TokenizerTests {
 
     @Test
     func bertUncased() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "google-bert/bert-base-uncased") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("google-bert/bert-base-uncased")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -322,7 +335,8 @@ struct TokenizerTests {
 
     @Test
     func robertaEncodeDecode() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "FacebookAI/roberta-base") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("FacebookAI/roberta-base")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -348,7 +362,8 @@ struct TokenizerTests {
 
     @Test
     func tokenizerBackend() async throws {
-        let tokenizerOpt = try await AutoTokenizer.from(pretrained: "mlx-community/Ministral-3-3B-Instruct-2512-4bit") as? PreTrainedTokenizer
+        let modelDirectory = try await downloadModel("mlx-community/Ministral-3-3B-Instruct-2512-4bit")
+        let tokenizerOpt = try await AutoTokenizer.from(modelDirectory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 

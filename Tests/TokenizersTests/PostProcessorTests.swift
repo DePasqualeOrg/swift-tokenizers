@@ -3,7 +3,6 @@
 import Foundation
 import Testing
 
-@testable import Hub
 @testable import Tokenizers
 
 @Suite("Post-processor functionality tests")

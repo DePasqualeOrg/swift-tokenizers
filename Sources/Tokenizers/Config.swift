@@ -662,7 +662,7 @@ public extension Config {
 }
 
 extension Config: Codable {
-    public init(from decoder: any Decoder) throws {
+    public init(from decoder: any Swift.Decoder) throws {
         // Try decoding as a single value first (for scalars and null)
         let singleValueContainer = try? decoder.singleValueContainer()
         if let container = singleValueContainer {
@@ -709,7 +709,7 @@ extension Config: Codable {
         self.value = .null
     }
 
-    private static func decodeTuple(_ decoder: Decoder) -> Data? {
+    private static func decodeTuple(_ decoder: Swift.Decoder) -> Data? {
         let unkeyedContainer = try? decoder.unkeyedContainer()
         if var container = unkeyedContainer {
             if container.count == 2 {
@@ -723,7 +723,7 @@ extension Config: Codable {
         return nil
     }
 
-    private static func decodeArray(_ decoder: Decoder) -> Data? {
+    private static func decodeArray(_ decoder: Swift.Decoder) -> Data? {
         do {
             if var container = try? decoder.unkeyedContainer() {
                 var elements: [Config] = []
@@ -737,7 +737,7 @@ extension Config: Codable {
         return nil
     }
 
-    private static func decodeDictionary(_ decoder: Decoder) -> Data? {
+    private static func decodeDictionary(_ decoder: Swift.Decoder) -> Data? {
         do {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             var dictionaryValues: [BinaryDistinctString: Config] = [:]

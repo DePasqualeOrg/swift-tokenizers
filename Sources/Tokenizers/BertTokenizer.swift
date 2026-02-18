@@ -2,7 +2,6 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import Hub
 
 /// A BERT-style tokenizer implementing WordPiece tokenization.
 ///
