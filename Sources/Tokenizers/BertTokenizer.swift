@@ -1,4 +1,5 @@
 // Copyright © Hugging Face SAS
+// Copyright © Anthony DePasquale
 
 import Foundation
 import Hub
@@ -74,8 +75,16 @@ public final class BertTokenizer: Sendable {
     ///   - tokenizerConfig: The tokenizer configuration
     ///   - tokenizerData: The tokenizer data containing vocabulary
     ///   - addedTokens: Additional tokens to include in the vocabulary
+    ///   - vocab: Pre-extracted vocabulary (unused by BERT tokenizer)
+    ///   - merges: Pre-extracted merge rules (unused by BERT tokenizer)
     /// - Throws: `TokenizerError` if the vocabulary is missing or malformed
-    public required convenience init(tokenizerConfig: Config, tokenizerData: Config, addedTokens: [String: Int]) throws {
+    public required convenience init(
+        tokenizerConfig: Config,
+        tokenizerData: Config,
+        addedTokens: [String: Int],
+        vocab: TokenizerVocab? = nil,
+        merges: TokenizerMerges? = nil
+    ) throws {
         guard let vocab = tokenizerData.model.vocab.dictionary() else {
             throw TokenizerError.missingVocab
         }
