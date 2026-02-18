@@ -3,33 +3,36 @@
 
 import Dispatch
 import Foundation
+import HuggingFace
 import Testing
-import Tokenizers
 import yyjson
 
-@testable import Hub
+@testable import Tokenizers
+
+private let downloadDestination: URL = {
+    let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+    return base.appending(component: "huggingface-benchmark-tests")
+}()
 
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["RUN_BENCHMARKS"] == "1"))
 struct JSONParserBenchmarkTests {
     static let modelId = "mlx-community/Qwen3-0.6B-Base-DQ5"
 
-    let modelFolder: URL
+    let modelDirectory: URL
     let benchmarkData: Data
-    let offlineHubApi: HubApi
 
     init() async throws {
-        // Download model files first (with network)
-        let hubApi = HubApi()
-        let repo = Hub.Repo(id: Self.modelId)
+        let hubClient = HubClient()
         let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json"]
-        modelFolder = try await hubApi.snapshot(from: repo, matching: tokenizerFiles)
+        modelDirectory = try await hubClient.downloadSnapshot(
+            of: "mlx-community/Qwen3-0.6B-Base-DQ5",
+            to: downloadDestination.appending(path: "mlx-community/Qwen3-0.6B-Base-DQ5"),
+            matching: tokenizerFiles
+        )
 
-        let tokenizerURL = modelFolder.appending(path: "tokenizer.json")
+        let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
         benchmarkData = try Data(contentsOf: tokenizerURL)
         print("Loaded benchmark file: \(ByteCountFormatter.string(fromByteCount: Int64(benchmarkData.count), countStyle: .file))")
-
-        // Create offline HubApi for benchmarking (no network calls)
-        offlineHubApi = HubApi(useOfflineMode: true)
     }
 
     // MARK: - Benchmark Utilities
@@ -86,8 +89,8 @@ struct JSONParserBenchmarkTests {
         return times
     }
 
-    /// Async version of measure for async operations.
-    private func measureAsync(
+    /// Async variant of measure for benchmarking async operations.
+    private func measure(
         label: String,
         labelWidth: Int,
         iterations: Int,
@@ -98,7 +101,6 @@ struct JSONParserBenchmarkTests {
         print("\(paddedLabel) ", terminator: "")
         fflush(stdout)
 
-        // Warmup runs (not measured)
         for _ in 0..<warmup {
             try await block()
         }
@@ -113,7 +115,7 @@ struct JSONParserBenchmarkTests {
             let nanoseconds = end.uptimeNanoseconds - start.uptimeNanoseconds
             times.append(Double(nanoseconds) / 1_000_000)
 
-            if (i + 1) % 5 == 0 {
+            if (i + 1) % 10 == 0 {
                 print(String(format: "%2d", i + 1), terminator: "")
             } else {
                 print(".", terminator: "")
@@ -220,11 +222,11 @@ struct JSONParserBenchmarkTests {
 
         print("Benchmarking tokenizer loading with \(iterations) iterations...\n")
 
-        let yyjsonTimes = try await measureAsync(label: "yyjson (current)", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelFolder: modelFolder, hubApi: offlineHubApi)
+        let yyjsonTimes = try await measure(label: "yyjson (current)", labelWidth: labelWidth, iterations: iterations) {
+            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
         }
 
-        let jsonSerTimes = try await measureAsync(label: "JSONSerialization", labelWidth: labelWidth, iterations: iterations) {
+        let jsonSerTimes = try await measure(label: "JSONSerialization", labelWidth: labelWidth, iterations: iterations) {
             let _ = try await loadTokenizerWithJSONSerialization()
         }
 
@@ -251,8 +253,8 @@ struct JSONParserBenchmarkTests {
 
     /// Loads a tokenizer using JSONSerialization instead of yyjson for comparison.
     private func loadTokenizerWithJSONSerialization() async throws -> Tokenizer {
-        let tokenizerDataURL = modelFolder.appending(path: "tokenizer.json")
-        let tokenizerConfigURL = modelFolder.appending(path: "tokenizer_config.json")
+        let tokenizerDataURL = modelDirectory.appending(path: "tokenizer.json")
+        let tokenizerConfigURL = modelDirectory.appending(path: "tokenizer_config.json")
 
         // Load tokenizer data with JSONSerialization
         let tokenizerDataRaw = try Data(contentsOf: tokenizerDataURL)

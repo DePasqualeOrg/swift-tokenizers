@@ -2,7 +2,6 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import Hub
 
 /// A Unigram tokenizer implementation based on the SentencePiece algorithm.
 ///

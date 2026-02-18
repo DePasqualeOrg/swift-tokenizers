@@ -7,7 +7,7 @@ import Dispatch
 import Foundation
 import Testing
 
-@testable import Hub
+import HuggingFace
 @testable import Tokenizers
 
 @Suite(
@@ -16,6 +16,20 @@ import Testing
     .enabled(if: ProcessInfo.processInfo.environment["RUN_BENCHMARKS"] != nil)
 )
 struct LoadingBenchmarks {
+    private let hubClient = HubClient()
+
+    private let downloadDestination: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return base.appending(component: "huggingface-loading-benchmark-tests")
+    }()
+
+    private func downloadModel(_ modelName: String, matching files: [String]) async throws -> URL {
+        try await hubClient.downloadSnapshot(
+            of: Repo.ID(rawValue: modelName)!,
+            to: downloadDestination.appending(path: modelName),
+            matching: files
+        )
+    }
 
     // MARK: - Benchmark Utilities
 
@@ -123,7 +137,7 @@ struct LoadingBenchmarks {
 
     // MARK: - Tests
 
-    @Test("Benchmark tokenizer loading from local folder")
+    @Test("Benchmark tokenizer loading from local directory")
     func benchmarkLocalLoading() async throws {
         let modelName = "Qwen/Qwen3-0.6B-Base"
         let iterations = 15
@@ -131,13 +145,11 @@ struct LoadingBenchmarks {
 
         // Download model files
         print("Downloading model: \(modelName)...")
-        let hubApi = HubApi()
-        let repo = Hub.Repo(id: modelName)
         let filesToDownload = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-        let modelFolder = try await hubApi.snapshot(from: repo, matching: filesToDownload)
+        let modelDirectory = try await downloadModel(modelName, matching: filesToDownload)
 
         // Get tokenizer.json size for context
-        let tokenizerJsonURL = modelFolder.appending(path: "tokenizer.json")
+        let tokenizerJsonURL = modelDirectory.appending(path: "tokenizer.json")
         let tokenizerJsonData = try Data(contentsOf: tokenizerJsonURL)
 
         // Count vocab/merges entries
@@ -152,7 +164,7 @@ struct LoadingBenchmarks {
         print("Benchmarking with \(iterations) iterations...\n")
 
         let times = try await measureAsync(label: "AutoTokenizer.from", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelFolder: modelFolder)
+            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
         }
 
         let s = stats(times)
@@ -181,13 +193,11 @@ struct LoadingBenchmarks {
 
         // Download model files
         print("Downloading model: \(modelName)...")
-        let hubApi = HubApi()
-        let repo = Hub.Repo(id: modelName)
         let filesToDownload = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-        let modelFolder = try await hubApi.snapshot(from: repo, matching: filesToDownload)
+        let modelDirectory = try await downloadModel(modelName, matching: filesToDownload)
 
-        let tokenizerJsonURL = modelFolder.appending(path: "tokenizer.json")
-        let tokenizerConfigURL = modelFolder.appending(path: "tokenizer_config.json")
+        let tokenizerJsonURL = modelDirectory.appending(path: "tokenizer.json")
+        let tokenizerConfigURL = modelDirectory.appending(path: "tokenizer_config.json")
 
         print("Benchmarking with \(iterations) iterations...\n")
 
@@ -218,7 +228,7 @@ struct LoadingBenchmarks {
 
         // --- OPTIMIZED PATH (new way) ---
         let optimizedTimes = try await measureAsync(label: "Optimized (current)", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelFolder: modelFolder)
+            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
         }
 
         let unoptimizedStats = stats(unoptimizedTimes)
@@ -253,19 +263,17 @@ struct LoadingBenchmarks {
 
         // Download model files
         print("Downloading model: \(modelName)...")
-        let hubApi = HubApi()
-        let repo = Hub.Repo(id: modelName)
         let filesToDownload = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-        let modelFolder = try await hubApi.snapshot(from: repo, matching: filesToDownload)
+        let modelDirectory = try await downloadModel(modelName, matching: filesToDownload)
 
-        let tokenizerJsonURL = modelFolder.appending(path: "tokenizer.json")
-        let tokenizerConfigURL = modelFolder.appending(path: "tokenizer_config.json")
+        let tokenizerJsonURL = modelDirectory.appending(path: "tokenizer.json")
+        let tokenizerConfigURL = modelDirectory.appending(path: "tokenizer_config.json")
 
         print("Running detailed breakdown (\(iterations) iterations)...\n")
 
         // Warmup
         for _ in 0..<2 {
-            let _ = try await AutoTokenizer.from(modelFolder: modelFolder)
+            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
         }
 
         // Collect times for each stage across iterations
@@ -430,12 +438,10 @@ struct LoadingBenchmarks {
 
         // Download model files
         print("Downloading model: \(modelName)...")
-        let hubApi = HubApi()
-        let repo = Hub.Repo(id: modelName)
         let filesToDownload = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-        let modelFolder = try await hubApi.snapshot(from: repo, matching: filesToDownload)
+        let modelDirectory = try await downloadModel(modelName, matching: filesToDownload)
 
-        let tokenizerJsonURL = modelFolder.appending(path: "tokenizer.json")
+        let tokenizerJsonURL = modelDirectory.appending(path: "tokenizer.json")
 
         // Parse JSON and extract vocab/merges
         let tokenizerJsonData = try Data(contentsOf: tokenizerJsonURL)

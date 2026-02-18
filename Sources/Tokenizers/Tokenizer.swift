@@ -2,8 +2,29 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import Hub
 import Jinja
+
+/// Vocabulary extracted from tokenizer.json for fast BPE or Unigram initialization.
+///
+/// - Note: `@unchecked Sendable` is safe because the underlying data is immutable after extraction from JSON.
+public enum TokenizerVocab: @unchecked Sendable {
+    /// BPE vocabulary: dictionary mapping token strings to token IDs.
+    case bpe(NSDictionary)
+    /// Unigram vocabulary: array of [token, score] pairs.
+    case unigram(NSArray)
+}
+
+/// Merge rules extracted from tokenizer.json for fast BPE initialization.
+///
+/// - Note: `@unchecked Sendable` is safe because the underlying data is immutable after extraction from JSON.
+public struct TokenizerMerges: @unchecked Sendable {
+    /// The raw merge rules as extracted from JSON.
+    public let rules: [Any]
+
+    public init(_ rules: [Any]) {
+        self.rules = rules
+    }
+}
 
 /// A type alias for chat messages, represented as key-value pairs.
 public typealias Message = [String: any Sendable]
@@ -931,8 +952,8 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
 /// A namespace for automatically creating appropriate tokenizer instances.
 ///
 /// `AutoTokenizer` provides static methods for loading pre-trained tokenizers
-/// from the Hugging Face Hub or local directories. It automatically selects
-/// the appropriate tokenizer class based on the configuration.
+/// from local directories. It automatically selects the appropriate tokenizer
+/// class based on the configuration.
 public enum AutoTokenizer {
     /// Registers a custom tokenizer class for a given tokenizer name.
     ///
@@ -957,12 +978,31 @@ public enum AutoTokenizer {
 }
 
 enum PreTrainedTokenizerClasses {
-    /// Class overrides for custom behavior
-    /// Not to be confused with the TokenizerModel classes defined in TokenizerModel
+    /// Class overrides for custom behavior.
+    /// Not to be confused with the TokenizerModel classes defined in TokenizerModel.
     static let tokenizerClasses: [String: PreTrainedTokenizer.Type] = [
         "LlamaTokenizer": LlamaPreTrainedTokenizer.self
     ]
 }
+
+/// Maps `model_type` from config.json to the corresponding tokenizer class name.
+/// Mirrors Python's `TOKENIZER_MAPPING_NAMES` from `transformers.models.auto.tokenization_auto`.
+private let modelTypeToTokenizerClass: [String: String] = [
+    "bert": "BertTokenizer",
+    "code_llama": "CodeLlamaTokenizer",
+    "codegen": "GPT2Tokenizer",
+    "cohere": "CohereTokenizer",
+    "distilbert": "BertTokenizer",
+    "gemma": "GemmaTokenizer",
+    "gemma2": "GemmaTokenizer",
+    "gpt2": "GPT2Tokenizer",
+    "llama": "LlamaTokenizer",
+    "qwen2": "Qwen2Tokenizer",
+    "roberta": "RobertaTokenizer",
+    "t5": "T5Tokenizer",
+    "whisper": "WhisperTokenizer",
+    "xlm-roberta": "XLMRobertaTokenizer",
+]
 
 public extension AutoTokenizer {
     /// Determines the appropriate tokenizer class for the given configuration.
@@ -983,10 +1023,131 @@ public extension AutoTokenizer {
         return PreTrainedTokenizer.self
     }
 
+    /// Loads a tokenizer from a local directory containing tokenizer configuration files.
+    ///
+    /// The directory must contain `tokenizer.json`. `tokenizer_config.json` is optional.
+    /// If a `chat_template.jinja` or `chat_template.json` file is present, its contents
+    /// will be merged into the tokenizer configuration.
+    ///
+    /// - Parameters:
+    ///   - modelDirectory: Path to a local directory containing tokenizer files
+    ///   - strict: Whether to enforce strict validation of tokenizer types
+    /// - Returns: A configured `Tokenizer` instance
+    /// - Throws: `TokenizerError` if required files are missing or configuration is invalid
+    static func from(modelDirectory: URL, strict: Bool = true) async throws -> Tokenizer {
+        // Load and parse tokenizer data (required)
+        let tokenizerDataURL = modelDirectory.appending(path: "tokenizer.json")
+        let tokenizerDataRaw: NSDictionary
+        do {
+            let data = try Data(contentsOf: tokenizerDataURL)
+            tokenizerDataRaw = try YYJSONParser.parseToNSDictionary(data)
+        } catch {
+            throw TokenizerError.missingConfig
+        }
+
+        // Extract vocab/merges from raw JSON before wrapping in Config.
+        // This preserves NSString byte-level keys (important for tokenizers
+        // whose vocab contains different Unicode normalization forms).
+        // Only extract for BPE and Unigram model types; other types (e.g.
+        // WordPiece) read vocab directly from Config.
+        var tokenizerVocab: TokenizerVocab?
+        var tokenizerMerges: TokenizerMerges?
+        let parsed = tokenizerDataRaw.mutableCopy() as! NSMutableDictionary
+        if let modelDict = parsed["model"] as? NSDictionary {
+            let model = modelDict.mutableCopy() as! NSMutableDictionary
+            let modelType = model["type"] as? String
+
+            if modelType == "BPE", let vocab = model["vocab"] as? NSDictionary {
+                tokenizerVocab = .bpe(vocab)
+                if let merges = model["merges"] as? [Any] {
+                    tokenizerMerges = TokenizerMerges(merges)
+                }
+                model.removeObject(forKey: "vocab")
+                model.removeObject(forKey: "merges")
+                parsed["model"] = model
+            } else if modelType == "Unigram", let vocab = model["vocab"] as? NSArray {
+                tokenizerVocab = .unigram(vocab)
+                model.removeObject(forKey: "vocab")
+                parsed["model"] = model
+            }
+        }
+        let tokenizerData = Config(parsed as! [NSString: Any])
+
+        // Load tokenizer config (optional — some models only have tokenizer.json)
+        let tokenizerConfigURL = modelDirectory.appending(path: "tokenizer_config.json")
+        var tokenizerConfig: Config
+        if let data = try? Data(contentsOf: tokenizerConfigURL),
+            let parsed = try? YYJSONParser.parseToConfig(data)
+        {
+            tokenizerConfig = parsed
+        } else {
+            tokenizerConfig = Config([:] as [NSString: Any])
+        }
+
+        // Resolve tokenizer_class if missing from tokenizer_config.json.
+        // Mirrors Python's AutoTokenizer resolution: check config.json for
+        // tokenizer_class directly, then fall back to model_type mapping.
+        if tokenizerConfig.tokenizerClass.string() == nil {
+            let modelConfigURL = modelDirectory.appending(path: "config.json")
+            if let modelConfigData = try? Data(contentsOf: modelConfigURL),
+                let modelConfig = try? YYJSONParser.parseToConfig(modelConfigData)
+            {
+                var resolvedClass: String?
+
+                // Stage 1: Check config.json for tokenizer_class
+                if let tokenizerClassName = modelConfig.tokenizerClass.string() {
+                    resolvedClass = tokenizerClassName
+                }
+                // Stage 2: Use model_type to look up tokenizer class
+                else if let modelType = modelConfig.modelType.string() {
+                    resolvedClass = modelTypeToTokenizerClass[modelType]
+                }
+
+                if let resolvedClass {
+                    var configDict = tokenizerConfig.dictionary() ?? [:]
+                    configDict["tokenizer_class"] = Config(resolvedClass)
+                    tokenizerConfig = Config(configDict)
+                }
+            }
+        }
+
+        // Load chat template if available (optional)
+        // Prefer .jinja template over .json template
+        let chatTemplateJinjaURL = modelDirectory.appending(path: "chat_template.jinja")
+        let chatTemplateJsonURL = modelDirectory.appending(path: "chat_template.json")
+
+        var chatTemplate: String? = nil
+        if FileManager.default.fileExists(atPath: chatTemplateJinjaURL.path) {
+            chatTemplate = try? String(contentsOf: chatTemplateJinjaURL, encoding: .utf8)
+        } else if FileManager.default.fileExists(atPath: chatTemplateJsonURL.path),
+            let chatTemplateData = try? Data(contentsOf: chatTemplateJsonURL),
+            let chatTemplateConfig = try? YYJSONParser.parseToConfig(chatTemplateData)
+        {
+            chatTemplate = chatTemplateConfig.chatTemplate.string()
+        }
+
+        if let chatTemplate {
+            if var configDict = tokenizerConfig.dictionary() {
+                configDict["chat_template"] = Config(chatTemplate)
+                tokenizerConfig = Config(configDict)
+            } else {
+                tokenizerConfig = Config(["chat_template": Config(chatTemplate)])
+            }
+        }
+
+        return try await from(
+            tokenizerConfig: tokenizerConfig,
+            tokenizerData: tokenizerData,
+            tokenizerVocab: tokenizerVocab,
+            tokenizerMerges: tokenizerMerges,
+            strict: strict
+        )
+    }
+
     /// Creates a tokenizer from configuration objects with optional pre-extracted vocab and merges.
     ///
-    /// When vocab and merges are pre-extracted (e.g., by `LanguageModelConfigurationFromHub`),
-    /// BPE and Unigram tokenizers use parallel dictionary building for faster loading.
+    /// When vocab and merges are pre-extracted, BPE and Unigram tokenizers use parallel
+    /// dictionary building for faster loading.
     ///
     /// - Parameters:
     ///   - tokenizerConfig: The tokenizer configuration (from tokenizer_config.json)
@@ -1013,64 +1174,6 @@ public extension AutoTokenizer {
             tokenizerData: tokenizerData,
             tokenizerVocab: tokenizerVocab,
             tokenizerMerges: tokenizerMerges,
-            strict: strict
-        )
-    }
-
-    /// Loads a tokenizer from a pre-trained model on the Hugging Face Hub.
-    ///
-    /// - Parameters:
-    ///   - model: The model identifier (e.g., "bert-base-uncased")
-    ///   - hubApi: The Hub API instance to use for downloading
-    ///   - revision: The git revision to use (defaults to "main")
-    ///   - strict: Whether to enforce strict validation
-    /// - Returns: A configured `Tokenizer` instance
-    /// - Throws: `TokenizerError` if the model cannot be loaded or configured
-    static func from(
-        pretrained model: String,
-        hubApi: HubApi = .shared,
-        revision: String = "main",
-        strict: Bool = true
-    ) async throws -> Tokenizer {
-        let config = LanguageModelConfigurationFromHub(modelName: model, revision: revision, hubApi: hubApi)
-        guard let tokenizerConfig = try await config.tokenizerConfig else { throw TokenizerError.missingConfig }
-        let tokenizerData = try await config.tokenizerData
-        let vocab = try await config.tokenizerVocab
-        let merges = try await config.tokenizerMerges
-
-        return try await AutoTokenizer.from(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: tokenizerData,
-            tokenizerVocab: vocab,
-            tokenizerMerges: merges,
-            strict: strict
-        )
-    }
-
-    /// Loads a tokenizer from a local model folder.
-    ///
-    /// - Parameters:
-    ///   - modelFolder: The URL path to the local model folder
-    ///   - hubApi: The Hub API instance to use (unused for local loading)
-    ///   - strict: Whether to enforce strict validation
-    /// - Returns: A configured `Tokenizer` instance
-    /// - Throws: `TokenizerError` if the model folder is invalid or missing files
-    static func from(
-        modelFolder: URL,
-        hubApi: HubApi = .shared,
-        strict: Bool = true
-    ) async throws -> Tokenizer {
-        let config = LanguageModelConfigurationFromHub(modelFolder: modelFolder, hubApi: hubApi)
-        guard let tokenizerConfig = try await config.tokenizerConfig else { throw TokenizerError.missingConfig }
-        let tokenizerData = try await config.tokenizerData
-        let vocab = try await config.tokenizerVocab
-        let merges = try await config.tokenizerMerges
-
-        return try await AutoTokenizer.from(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: tokenizerData,
-            tokenizerVocab: vocab,
-            tokenizerMerges: merges,
             strict: strict
         )
     }

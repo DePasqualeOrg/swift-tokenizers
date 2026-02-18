@@ -1,7 +1,6 @@
 // Copyright © Hugging Face SAS
 
 import Foundation
-import Hub
 
 /// A protocol for decoding operations that convert tokens back to readable text.
 ///

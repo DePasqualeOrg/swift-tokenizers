@@ -1,7 +1,6 @@
 // Copyright © Hugging Face SAS
 
 import Foundation
-import Hub
 
 /// A protocol for post-processing operations applied after tokenization.
 ///

@@ -2,7 +2,6 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import Hub
 
 /// A Byte-Pair Encoding (BPE) tokenizer implementation.
 ///

@@ -1,7 +1,6 @@
 // Copyright © Hugging Face SAS
 
 import Foundation
-import Hub
 
 /// Character class used by punctuation-based pre-tokenizers.
 private let punctuationRegex = #"\p{P}\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E"#
