@@ -147,7 +147,7 @@ struct TokenizerTests {
         // These are two different characters
         let cases = [
             "\u{0061}\u{0300}", // NFD: a + combining grave accent
-            "\u{00E0}",         // NFC: precomposed à
+            "\u{00E0}", // NFC: precomposed à
         ]
         let expected = [217138, 1305]
         for (s, expected) in zip(cases, expected) {

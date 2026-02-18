@@ -6,7 +6,7 @@ let package = Package(
     name: "swift-tokenizers",
     platforms: [.iOS(.v16), .macOS(.v13)],
     products: [
-        .library(name: "Tokenizers", targets: ["Tokenizers"]),
+        .library(name: "Tokenizers", targets: ["Tokenizers"])
     ],
     dependencies: [
         .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.0.0"),

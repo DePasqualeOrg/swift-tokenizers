@@ -5,9 +5,9 @@
 
 import Dispatch
 import Foundation
+import HuggingFace
 import Testing
 
-import HuggingFace
 @testable import Tokenizers
 
 @Suite(
