@@ -838,3 +838,15 @@ public enum ConfigError: Error {
     case typeMismatch(expected: Config.Data, actual: Config.Data)
     case typeConversionFailed(value: Sendable, targetType: Sendable.Type)
 }
+
+extension Config {
+    /// Extracts a token string from a Config value that may be either a plain string
+    /// or an AddedToken dictionary with a "content" key.
+    // TODO: support lstrip, rstrip, normalized, etc. from AddedToken
+    var tokenString: String? {
+        if let stringValue = string() {
+            return stringValue
+        }
+        return self.content.string()
+    }
+}

@@ -131,17 +131,6 @@ public protocol TokenizingModel {
     var fuseUnknownTokens: Bool { get }
 }
 
-/// Helper - possibly to be moved somewhere else
-func addedTokenAsString(_ addedToken: Config?) -> String? {
-    guard let addedToken else { return nil }
-    if let stringValue = addedToken.string() {
-        return stringValue
-    }
-    // This is possibly a serialization of the AddedToken class
-    // TODO: support lstrip, rstrip, normalized, etc.
-    return addedToken.content.string()
-}
-
 public extension TokenizingModel {
     func callAsFunction(_ text: String) -> [String] {
         tokenize(text: text)
@@ -482,23 +471,17 @@ public extension Tokenizer {
     }
 }
 
-let specialTokenAttributes: [String] = [
-    "bos_token",
-    "eos_token",
-    "unk_token",
-    "sep_token",
-    "pad_token",
-    "cls_token",
-    "mask_token",
-    "additional_special_tokens",
-]
-
 /// A comprehensive tokenizer implementation supporting pre-trained models from Hugging Face.
 ///
 /// This class provides a complete tokenizer implementation that can be initialized from
 /// Hugging Face Hub configuration files and supports all standard tokenization operations
 /// including chat template application, normalization, pre-tokenization, and post-processing.
 public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
+    private static let specialTokenAttributes: Set<String> = [
+        "bos_token", "eos_token", "unk_token", "sep_token",
+        "pad_token", "cls_token", "mask_token", "additional_special_tokens",
+    ]
+
     let model: TokenizingModel
 
     public var bosToken: String? { model.bosToken }
@@ -834,11 +817,11 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         }
 
         for (key, value) in tokenizerConfig.dictionary(or: [:]) {
-            if specialTokenAttributes.contains(key.string), !value.isNull() {
+            if Self.specialTokenAttributes.contains(key.string), !value.isNull() {
                 if let stringValue = value.string() {
                     context[key.string] = .string(stringValue)
                 } else if let dictionary = value.dictionary() {
-                    if let addedTokenString = addedTokenAsString(Config(dictionary)) {
+                    if let addedTokenString = Config(dictionary).tokenString {
                         context[key.string] = .string(addedTokenString)
                     }
                 } else if let array: [String] = value.get() {
@@ -1101,52 +1084,51 @@ class T5Tokenizer: UnigramTokenizer, @unchecked Sendable {}
 
 // MARK: - PreTrainedTokenizer classes
 
-let sentencePieceUnderline = "▁"
-
-/// Hack for Llama tokenizers, see https://github.com/huggingface/transformers/blob/bcb841f0073fcd7a4fb88ea8064313c17dcab04a/src/transformers/models/llama/tokenization_llama_fast.py#L181
-/// Return updated config, or nil
-func maybeUpdatePostProcessor(tokenizerConfig: Config, processorConfig: Config?) throws -> Config? {
-    // If it's already a Template processor (instead of a ByteLevel one), assume it's correct
-    let postProcessor = PostProcessorFactory.fromConfig(config: processorConfig)
-    guard !(postProcessor is TemplateProcessing) else { return nil }
-
-    let addBosToken = tokenizerConfig.addBosToken.boolean(or: false)
-    let bosToken = addedTokenAsString(tokenizerConfig.bosToken)
-    if addBosToken, bosToken == nil {
-        throw TokenizerError.mismatchedConfig("add_bos_token is True but bos_token is nil")
-    }
-
-    let addEosToken = tokenizerConfig.addEosToken.boolean(or: false)
-    let eosToken = addedTokenAsString(tokenizerConfig.eosToken)
-    if addEosToken, eosToken == nil {
-        throw TokenizerError.mismatchedConfig("add_eos_token is True but eos_token is nil")
-    }
-
-    // alt implementation
-    var single: [[String: Any]] = []
-    if addBosToken {
-        single = single + [["SpecialToken": ["id": bosToken!, "type_id": 0]]]
-    }
-    single = single + [["Sequence": ["id": "A", "type_id": 0]]]
-    if addEosToken {
-        single = single + [["SpecialToken": ["id": eosToken!, "type_id": 0]]]
-    }
-
-    var pair: [[String: Any]] = single
-    if addBosToken {
-        pair = pair + [["SpecialToken": ["id": bosToken!, "type_id": 1]]]
-    }
-    pair = pair + [["Sequence": ["id": "B", "type_id": 1]]]
-    if addEosToken {
-        pair = pair + [["SpecialToken": ["id": eosToken!, "type_id": 1]]]
-    }
-
-    let postProcessorConfig = Config(["type": PostProcessorType.TemplateProcessing.rawValue, "single": single, "pair": pair])
-    return postProcessorConfig
-}
-
 /// See https://github.com/xenova/transformers.js/blob/1a9964fb09b8f54fcbeac46dc6aae8d76795809d/src/tokenizers.js#L3203 for these exceptions
 class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
+    private static let sentencePieceUnderline = "▁"
+
+    /// Builds an updated post-processor config for Llama tokenizers that use bos/eos tokens.
+    /// See https://github.com/huggingface/transformers/blob/bcb841f0073fcd7a4fb88ea8064313c17dcab04a/src/transformers/models/llama/tokenization_llama_fast.py#L181
+    /// Returns updated config, or nil if the existing post-processor is already correct.
+    private static func updatedPostProcessorConfig(tokenizerConfig: Config, processorConfig: Config?) throws -> Config? {
+        // If it's already a Template processor (instead of a ByteLevel one), assume it's correct
+        let postProcessor = PostProcessorFactory.fromConfig(config: processorConfig)
+        guard !(postProcessor is TemplateProcessing) else { return nil }
+
+        let addBosToken = tokenizerConfig.addBosToken.boolean(or: false)
+        let bosToken = tokenizerConfig.bosToken.tokenString
+        if addBosToken, bosToken == nil {
+            throw TokenizerError.mismatchedConfig("add_bos_token is True but bos_token is nil")
+        }
+
+        let addEosToken = tokenizerConfig.addEosToken.boolean(or: false)
+        let eosToken = tokenizerConfig.eosToken.tokenString
+        if addEosToken, eosToken == nil {
+            throw TokenizerError.mismatchedConfig("add_eos_token is True but eos_token is nil")
+        }
+
+        var single: [[String: Any]] = []
+        if addBosToken {
+            single = single + [["SpecialToken": ["id": bosToken!, "type_id": 0]]]
+        }
+        single = single + [["Sequence": ["id": "A", "type_id": 0]]]
+        if addEosToken {
+            single = single + [["SpecialToken": ["id": eosToken!, "type_id": 0]]]
+        }
+
+        var pair: [[String: Any]] = single
+        if addBosToken {
+            pair = pair + [["SpecialToken": ["id": bosToken!, "type_id": 1]]]
+        }
+        pair = pair + [["Sequence": ["id": "B", "type_id": 1]]]
+        if addEosToken {
+            pair = pair + [["SpecialToken": ["id": eosToken!, "type_id": 1]]]
+        }
+
+        let postProcessorConfig = Config(["type": PostProcessorType.TemplateProcessing.rawValue, "single": single, "pair": pair])
+        return postProcessorConfig
+    }
     let isLegacy: Bool
 
     /// Internal init accepting a pre-built model (used by async factory).
@@ -1210,7 +1192,7 @@ class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
             ]
         }
 
-        if let postProcessorConfig = try maybeUpdatePostProcessor(tokenizerConfig: tokenizerConfig, processorConfig: tokenizerData["postProcessor"]) {
+        if let postProcessorConfig = try updatedPostProcessorConfig(tokenizerConfig: tokenizerConfig, processorConfig: tokenizerData["postProcessor"]) {
             configDictionary["post_processor"] = .init(postProcessorConfig.dictionary(or: [:]))
         }
 
@@ -1224,8 +1206,8 @@ class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
             return super.tokenize(text: text)
         }
 
-        let tokens = super.tokenize(text: sentencePieceUnderline + text.replacingOccurrences(of: sentencePieceUnderline, with: " "))
-        if tokens.first == sentencePieceUnderline, let second = tokens.dropFirst().first, specialTokens[second] != nil {
+        let tokens = super.tokenize(text: Self.sentencePieceUnderline + text.replacingOccurrences(of: Self.sentencePieceUnderline, with: " "))
+        if tokens.first == Self.sentencePieceUnderline, let second = tokens.dropFirst().first, specialTokens[second] != nil {
             return Array(tokens[1...])
         }
         return tokens
