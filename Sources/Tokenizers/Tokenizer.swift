@@ -395,75 +395,11 @@ public protocol Tokenizer: Sendable {
     /// Whether this tokenizer has a chat template configured.
     var hasChatTemplate: Bool { get }
 
-    /// Applies the configured chat template to format messages for model input.
-    ///
-    /// - Parameter messages: Array of message dictionaries representing the conversation
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails or no template is available
-    func applyChatTemplate(messages: [Message]) throws -> [Int]
-
-    /// Applies the configured chat template with optional tool specifications.
+    /// Applies a chat template to format messages for model input.
     ///
     /// - Parameters:
     ///   - messages: Array of message dictionaries representing the conversation
-    ///   - tools: Optional array of tool specifications for function calling
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails or no template is available
-    func applyChatTemplate(messages: [Message], tools: [ToolSpec]?) throws -> [Int]
-
-    /// Applies the configured chat template with tools and additional context.
-    ///
-    /// - Parameters:
-    ///   - messages: Array of message dictionaries representing the conversation
-    ///   - tools: Optional array of tool specifications for function calling
-    ///   - additionalContext: Additional context variables for template rendering
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails or no template is available
-    func applyChatTemplate(messages: [Message], tools: [ToolSpec]?, additionalContext: [String: any Sendable]?) throws -> [Int]
-
-    /// Applies a specific chat template to format messages.
-    ///
-    /// - Parameters:
-    ///   - messages: Array of message dictionaries representing the conversation
-    ///   - chatTemplate: The chat template to use (literal template or template name)
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails
-    func applyChatTemplate(messages: [Message], chatTemplate: ChatTemplateArgument) throws -> [Int]
-
-    /// Applies a chat template provided as a literal string.
-    ///
-    /// - Parameters:
-    ///   - messages: Array of message dictionaries representing the conversation
-    ///   - chatTemplate: The Jinja template string to use for formatting
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails
-    func applyChatTemplate(messages: [Message], chatTemplate: String) throws -> [Int]
-
-    /// Applies a chat template with full control over all parameters.
-    ///
-    /// - Parameters:
-    ///   - messages: Array of message dictionaries representing the conversation
-    ///   - chatTemplate: Optional chat template specification
-    ///   - addGenerationPrompt: Whether to add a generation prompt for the assistant
-    ///   - truncation: Whether to truncate if the result exceeds maximum length
-    ///   - maxLength: Maximum allowed token length
-    ///   - tools: Optional array of tool specifications for function calling
-    /// - Returns: Token IDs for the formatted conversation
-    /// - Throws: `TokenizerError` if template application fails
-    func applyChatTemplate(
-        messages: [Message],
-        chatTemplate: ChatTemplateArgument?,
-        addGenerationPrompt: Bool,
-        truncation: Bool,
-        maxLength: Int?,
-        tools: [ToolSpec]?
-    ) throws -> [Int]
-
-    /// Applies a chat template with full control over all parameters including additional context.
-    ///
-    /// - Parameters:
-    ///   - messages: Array of message dictionaries representing the conversation
-    ///   - chatTemplate: Optional chat template specification
+    ///   - chatTemplate: Optional chat template specification (literal or named)
     ///   - addGenerationPrompt: Whether to add a generation prompt for the assistant
     ///   - truncation: Whether to truncate if the result exceeds maximum length
     ///   - maxLength: Maximum allowed token length
@@ -485,25 +421,46 @@ public protocol Tokenizer: Sendable {
 extension Tokenizer {
     public var hasChatTemplate: Bool { false }
 
-    /// Call previous signature for backwards compatibility
-    func applyChatTemplate(
+    /// Convenience with default parameter values for the protocol requirement.
+    public func applyChatTemplate(
         messages: [Message],
-        // A chat template can optionally be provided or specified by name when several templates are included in the tokenizer config. Normally this is not necessary.
-        chatTemplate: ChatTemplateArgument?,
-        addGenerationPrompt: Bool,
-        truncation: Bool,
-        maxLength: Int?,
-        tools: [ToolSpec]?,
-        additionalContext: [String: any Sendable]?
+        chatTemplate: ChatTemplateArgument? = nil,
+        addGenerationPrompt: Bool = true,
+        truncation: Bool = false,
+        maxLength: Int? = nil,
+        tools: [ToolSpec]? = nil,
+        additionalContext: [String: any Sendable]? = nil
     ) throws -> [Int] {
-        if additionalContext == nil {
-            try applyChatTemplate(
-                messages: messages, chatTemplate: chatTemplate, addGenerationPrompt: addGenerationPrompt, truncation: truncation, maxLength: maxLength,
-                tools: tools
-            )
-        } else {
-            throw TokenizerError.chatTemplate("Not implemented")
-        }
+        try applyChatTemplate(
+            messages: messages,
+            chatTemplate: chatTemplate,
+            addGenerationPrompt: addGenerationPrompt,
+            truncation: truncation,
+            maxLength: maxLength,
+            tools: tools,
+            additionalContext: additionalContext
+        )
+    }
+
+    /// Convenience that accepts a template string directly.
+    public func applyChatTemplate(
+        messages: [Message],
+        chatTemplate: String,
+        addGenerationPrompt: Bool = true,
+        truncation: Bool = false,
+        maxLength: Int? = nil,
+        tools: [ToolSpec]? = nil,
+        additionalContext: [String: any Sendable]? = nil
+    ) throws -> [Int] {
+        try applyChatTemplate(
+            messages: messages,
+            chatTemplate: .literal(chatTemplate),
+            addGenerationPrompt: addGenerationPrompt,
+            truncation: truncation,
+            maxLength: maxLength,
+            tools: tools,
+            additionalContext: additionalContext
+        )
     }
 }
 
@@ -806,51 +763,10 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         !tokenizerConfig.chatTemplate.isNull()
     }
 
-    public func applyChatTemplate(messages: [Message]) throws -> [Int] {
-        try applyChatTemplate(messages: messages, addGenerationPrompt: true)
-    }
-
-    public func applyChatTemplate(messages: [Message], tools: [ToolSpec]? = nil) throws -> [Int] {
-        try applyChatTemplate(messages: messages, addGenerationPrompt: true, tools: tools)
-    }
-
-    public func applyChatTemplate(messages: [Message], tools: [ToolSpec]? = nil, additionalContext: [String: any Sendable]? = nil) throws
-        -> [Int]
-    {
-        try applyChatTemplate(
-            messages: messages,
-            addGenerationPrompt: true,
-            tools: tools,
-            additionalContext: additionalContext
-        )
-    }
-
-    public func applyChatTemplate(messages: [Message], chatTemplate: ChatTemplateArgument) throws -> [Int] {
-        try applyChatTemplate(messages: messages, chatTemplate: chatTemplate, addGenerationPrompt: true)
-    }
-
-    public func applyChatTemplate(messages: [Message], chatTemplate: String) throws -> [Int] {
-        try applyChatTemplate(messages: messages, chatTemplate: .literal(chatTemplate), addGenerationPrompt: true)
-    }
-
     public func applyChatTemplate(
         messages: [Message],
         chatTemplate: ChatTemplateArgument? = nil,
-        addGenerationPrompt: Bool = false,
-        truncation: Bool = false,
-        maxLength: Int? = nil,
-        tools: [ToolSpec]? = nil
-    ) throws -> [Int] {
-        try applyChatTemplate(
-            messages: messages, chatTemplate: chatTemplate, addGenerationPrompt: addGenerationPrompt, truncation: truncation, maxLength: maxLength,
-            tools: tools, additionalContext: nil
-        )
-    }
-
-    public func applyChatTemplate(
-        messages: [Message],
-        chatTemplate: ChatTemplateArgument? = nil,
-        addGenerationPrompt: Bool = false,
+        addGenerationPrompt: Bool = true,
         truncation: Bool = false,
         maxLength: Int? = nil,
         // A list of tools (callable functions) that will be accessible to the model. If the template does not
