@@ -287,7 +287,8 @@ struct LoadingBenchmarks {
             // --- Stage 2: Parse JSON ---
             let stage2Start = DispatchTime.now()
             let parsedAny = try YYJSONParser.parseToNSDictionary(tokenizerJsonData)
-            let parsed = NSMutableDictionary(dictionary: parsedAny)
+            // mutableCopy() instead of NSMutableDictionary(dictionary:) for Linux compatibility
+            let parsed = parsedAny.mutableCopy() as! NSMutableDictionary
             let parsedConfig = try JSONSerialization.jsonObject(with: tokenizerConfigData) as! [NSString: Any]
             stage2Times.append(Double(DispatchTime.now().uptimeNanoseconds - stage2Start.uptimeNanoseconds) / 1_000_000)
 
@@ -296,7 +297,8 @@ struct LoadingBenchmarks {
             var tokenizerVocab: NSDictionary?
             var tokenizerMerges: [Any]?
             if let modelDict = parsed["model"] as? NSDictionary {
-                let model = NSMutableDictionary(dictionary: modelDict)
+                // mutableCopy() instead of NSMutableDictionary(dictionary:) for Linux compatibility
+                let model = modelDict.mutableCopy() as! NSMutableDictionary
                 tokenizerVocab = model["vocab"] as? NSDictionary
                 tokenizerMerges = model["merges"] as? [Any]
                 model.removeObject(forKey: "vocab")

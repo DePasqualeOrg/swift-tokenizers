@@ -380,14 +380,16 @@ public actor LanguageModelConfigurationFromHub {
             // This avoids the expensive recursive wrapping of 300k+ entries in Config objects.
             let tokenizerJsonData = try Data(contentsOf: tokenizerDataURL)
             let parsedAny = try YYJSONParser.parseToNSDictionary(tokenizerJsonData)
-            let parsed = NSMutableDictionary(dictionary: parsedAny)
+            // mutableCopy() instead of NSMutableDictionary(dictionary:) for Linux compatibility
+            let parsed = parsedAny.mutableCopy() as! NSMutableDictionary
 
             // Extract vocab and merges for fast tokenizer initialization
             var tokenizerVocab: TokenizerVocab? = nil
             var tokenizerMerges: TokenizerMerges? = nil
 
             if let modelDict = parsed["model"] as? NSDictionary {
-                let model = NSMutableDictionary(dictionary: modelDict)
+                // mutableCopy() instead of NSMutableDictionary(dictionary:) for Linux compatibility
+                let model = modelDict.mutableCopy() as! NSMutableDictionary
                 let modelType = model["type"] as? String
 
                 if modelType == "BPE", let vocab = model["vocab"] as? NSDictionary {
