@@ -4,7 +4,6 @@
 import Foundation
 import Hub
 import Jinja
-import os
 
 /// A type alias for chat messages, represented as key-value pairs.
 public typealias Message = [String: any Sendable]
@@ -545,7 +544,8 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
     private let cleanUpTokenizationSpaces: Bool
 
     /// Thread-safe cache for compiled Jinja templates keyed by their literal template string
-    private let templateCache = OSAllocatedUnfairLock(initialState: [String: Template]())
+    private var _templateCache = [String: Template]()
+    private let _templateCacheLock = NSLock()
 
     /// Parses addedTokens from tokenizerData, returning (addedTokens dict, specialTokens dict).
     internal static func parseAddedTokens(from tokenizerData: Config) -> (tokens: [String: Int], special: [String: Int]) {
@@ -630,21 +630,24 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
 
     private func compiledTemplate(for templateString: String) throws -> Template {
         // Fast path: check cache
-        if let cached = templateCache.withLock({ $0[templateString] }) {
+        _templateCacheLock.lock()
+        if let cached = _templateCache[templateString] {
+            _templateCacheLock.unlock()
             return cached
         }
+        _templateCacheLock.unlock()
 
         // Compile template outside of lock to avoid holding lock during expensive operation
         let compiled = try Template(templateString)
 
         // Insert into cache (double-checked in case another thread compiled the same template)
-        return templateCache.withLock { cache in
-            if let cached = cache[templateString] {
-                return cached
-            }
-            cache[templateString] = compiled
-            return compiled
+        _templateCacheLock.lock()
+        defer { _templateCacheLock.unlock() }
+        if let cached = _templateCache[templateString] {
+            return cached
         }
+        _templateCache[templateString] = compiled
+        return compiled
     }
 
     func preTokenize(_ text: String, options: PreTokenizerOptions) -> [String] {
