@@ -207,10 +207,10 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             unknownTokenId = nil
         }
 
-        eosToken = addedTokenAsString(tokenizerConfig.eosToken)
+        eosToken = tokenizerConfig.eosToken.tokenString
         eosTokenId = eosToken.flatMap { tokensToIds[$0 as NSString] }
 
-        bosToken = addedTokenAsString(tokenizerConfig.bosToken)
+        bosToken = tokenizerConfig.bosToken.tokenString
         bosTokenId = bosToken.flatMap { tokensToIds[$0 as NSString] }
 
         fuseUnknownTokens = tokenizerConfig.fuseUnk.boolean(or: false)
