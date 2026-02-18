@@ -46,4 +46,46 @@ struct DecoderTests {
             #expect(output.joined() == expected)
         }
     }
+
+    @Suite("Decoder error handling")
+    struct DecoderErrorTests {
+        @Test("Unsupported decoder type throws unsupportedComponent")
+        func unsupportedDecoderType() throws {
+            let config = Config(["type": "NonExistentDecoder"])
+            #expect(throws: TokenizerError.unsupportedComponent(kind: "Decoder", type: "NonExistentDecoder")) {
+                try DecoderFactory.fromConfig(config: config)
+            }
+        }
+
+        @Test("WordPieceDecoder throws on missing prefix")
+        func wordPieceMissingPrefix() throws {
+            let config = Config(["cleanup": true])
+            #expect(throws: TokenizerError.missingConfigField(field: "prefix", component: "WordPieceDecoder")) {
+                try WordPieceDecoder(config: config)
+            }
+        }
+
+        @Test("Sequence decoder throws on missing decoders")
+        func sequenceMissingDecoders() throws {
+            let config = Config(["type": "Sequence"])
+            #expect(throws: TokenizerError.missingConfigField(field: "decoders", component: "Sequence decoder")) {
+                try DecoderSequence(config: config)
+            }
+        }
+
+        @Test("StripDecoder throws on missing content, start, or stop")
+        func stripMissingFields() throws {
+            #expect(throws: TokenizerError.missingConfigField(field: "content", component: "StripDecoder")) {
+                try StripDecoder(config: Config(["start": 1, "stop": 1]))
+            }
+
+            #expect(throws: TokenizerError.missingConfigField(field: "start", component: "StripDecoder")) {
+                try StripDecoder(config: Config(["content": " ", "stop": 1]))
+            }
+
+            #expect(throws: TokenizerError.missingConfigField(field: "stop", component: "StripDecoder")) {
+                try StripDecoder(config: Config(["content": " ", "start": 1]))
+            }
+        }
+    }
 }

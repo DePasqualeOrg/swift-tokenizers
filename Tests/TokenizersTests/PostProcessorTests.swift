@@ -106,4 +106,56 @@ struct PostProcessorTests {
             #expect(output == expect)
         }
     }
+
+    @Suite("Post-processor error handling")
+    struct PostProcessorErrorTests {
+        @Test("Unsupported post-processor type throws unsupportedComponent")
+        func unsupportedPostProcessorType() throws {
+            let config = Config(["type": "NonExistentPostProcessor"])
+            #expect(throws: TokenizerError.unsupportedComponent(kind: "PostProcessor", type: "NonExistentPostProcessor")) {
+                try PostProcessorFactory.fromConfig(config: config)
+            }
+        }
+
+        @Test("TemplateProcessing throws on missing single or pair")
+        func templateMissingSingleOrPair() throws {
+            #expect(throws: TokenizerError.missingConfigField(field: "single", component: "TemplateProcessing")) {
+                try TemplateProcessing(config: Config(["pair": [] as [String]]))
+            }
+
+            #expect(throws: TokenizerError.missingConfigField(field: "pair", component: "TemplateProcessing")) {
+                try TemplateProcessing(config: Config(["single": [] as [String]]))
+            }
+        }
+
+        @Test("RobertaProcessing throws on missing sep or cls")
+        func robertaMissingSepOrCls() throws {
+            #expect(throws: TokenizerError.missingConfigField(field: "sep", component: "RobertaProcessing")) {
+                try RobertaProcessing(config: Config(["cls": ["[CLS]", 0 as UInt]]))
+            }
+
+            #expect(throws: TokenizerError.missingConfigField(field: "cls", component: "RobertaProcessing")) {
+                try RobertaProcessing(config: Config(["sep": ["[SEP]", 0 as UInt]]))
+            }
+        }
+
+        @Test("BertProcessing throws on missing sep or cls")
+        func bertMissingSepOrCls() throws {
+            #expect(throws: TokenizerError.missingConfigField(field: "sep", component: "BertProcessing")) {
+                try BertProcessing(config: Config(["cls": ["[CLS]", 0 as UInt]]))
+            }
+
+            #expect(throws: TokenizerError.missingConfigField(field: "cls", component: "BertProcessing")) {
+                try BertProcessing(config: Config(["sep": ["[SEP]", 0 as UInt]]))
+            }
+        }
+
+        @Test("Sequence post-processor throws on missing processors")
+        func sequenceMissingProcessors() throws {
+            let config = Config(["type": "Sequence"])
+            #expect(throws: TokenizerError.missingConfigField(field: "processors", component: "Sequence post-processor")) {
+                try SequenceProcessing(config: config)
+            }
+        }
+    }
 }

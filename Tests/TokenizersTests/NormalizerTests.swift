@@ -265,4 +265,34 @@ struct NormalizerTests {
         let config = Config(["type": NormalizerType.Strip.rawValue])
         #expect(try NormalizerFactory.fromConfig(config: config) as? StripNormalizer != nil)
     }
+
+    @Suite("Normalizer error handling")
+    struct NormalizerErrorTests {
+        @Test("Unsupported normalizer type throws unsupportedComponent")
+        func unsupportedNormalizerType() throws {
+            let config = Config(["type": "NonExistentNormalizer"])
+            #expect(throws: TokenizerError.unsupportedComponent(kind: "Normalizer", type: "NonExistentNormalizer")) {
+                try NormalizerFactory.fromConfig(config: config)
+            }
+        }
+
+        @Test("Sequence normalizer throws on missing normalizers")
+        func sequenceMissingNormalizers() throws {
+            let config = Config(["type": "Sequence"])
+            #expect(throws: TokenizerError.missingConfigField(field: "normalizers", component: "Sequence normalizer")) {
+                try NormalizerSequence(config: config)
+            }
+        }
+
+        @Test("Invalid regex pattern throws mismatchedConfig")
+        func invalidRegexPattern() throws {
+            let config = Config([
+                "content": "replacement",
+                "pattern": ["Regex": "[invalid("],
+            ])
+            #expect(throws: TokenizerError.self) {
+                try ReplaceNormalizer(config: config)
+            }
+        }
+    }
 }
