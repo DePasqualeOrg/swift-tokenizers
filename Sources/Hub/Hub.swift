@@ -1,9 +1,5 @@
-//
-//  Hub.swift
-//
-//
-//  Created by Pedro Cuenca on 18/5/23.
-//
+// Copyright © Hugging Face SAS
+// Copyright © Anthony DePasquale
 
 import Foundation
 

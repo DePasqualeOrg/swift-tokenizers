@@ -1,10 +1,6 @@
-//
-//  TokenizerTests.swift
-//
-//  Created by Pedro Cuenca on July 2023.
-//  Based on GPT2TokenizerTests by Julien Chaumond.
-//  Copyright © 2023 Hugging Face. All rights reserved.
-//
+// Copyright © Hugging Face SAS
+// Copyright © Anthony DePasquale
+// Based on GPT2TokenizerTests by Julien Chaumond.
 
 import Foundation
 import Testing
