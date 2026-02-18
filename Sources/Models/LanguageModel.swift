@@ -1,9 +1,5 @@
-//
-//  LanguageModel.swift
-//
-//
-//  Created by Pedro Cuenca on 7/5/23.
-//
+// Copyright © Hugging Face SAS
+// Copyright © Anthony DePasquale
 
 #if canImport(CoreML)
 import CoreML
