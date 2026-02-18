@@ -33,7 +33,7 @@ public typealias Message = [String: any Sendable]
 public typealias ToolSpec = [String: any Sendable]
 
 /// Errors that can occur during tokenizer operations.
-public enum TokenizerError: LocalizedError {
+public enum TokenizerError: LocalizedError, Equatable {
     case missingConfig
     case missingTokenizerClassInConfig
     case unsupportedTokenizer(String)
@@ -43,6 +43,8 @@ public enum TokenizerError: LocalizedError {
     case missingChatTemplate
     case tooLong(String)
     case mismatchedConfig(String)
+    case unsupportedComponent(kind: String, type: String)
+    case missingConfigField(field: String, component: String)
 
     public var errorDescription: String? {
         switch self {
@@ -64,6 +66,10 @@ public enum TokenizerError: LocalizedError {
             "Input is too long: \(message)"
         case let .mismatchedConfig(message):
             "Tokenizer configuration mismatch: \(message)"
+        case let .unsupportedComponent(kind, type):
+            "Unsupported \(kind) type: '\(type)'"
+        case let .missingConfigField(field, component):
+            "Missing '\(field)' in \(component) configuration"
         }
     }
 }

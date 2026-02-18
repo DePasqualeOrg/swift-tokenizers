@@ -101,7 +101,7 @@ struct PreTokenizerFactory {
         case .Whitespace, .WhitespaceSplit: return WhitespacePreTokenizer(config: config)
         case .Metaspace: return MetaspacePreTokenizer(config: config)
         case .BertPreTokenizer: return BertPreTokenizer(config: config)
-        default: throw TokenizerError.mismatchedConfig("Unsupported PreTokenizer type: \(typeName)")
+        default: throw TokenizerError.unsupportedComponent(kind: "PreTokenizer", type: typeName)
         }
     }
 }
@@ -124,7 +124,7 @@ class PreTokenizerSequence: PreTokenizer {
 
     required init(config: Config) throws {
         guard let configs = config.pretokenizers.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `pretokenizers` in Sequence pre-tokenizer configuration")
+            throw TokenizerError.missingConfigField(field: "pretokenizers", component: "Sequence pre-tokenizer")
         }
         preTokenizers = try configs.compactMap { try PreTokenizerFactory.fromConfig(config: $0) }
     }

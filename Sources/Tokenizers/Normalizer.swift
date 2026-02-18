@@ -68,7 +68,7 @@ struct NormalizerFactory {
         case .Precompiled: return PrecompiledNormalizer(config: config)
         case .StripAccents: return StripAccentsNormalizer(config: config)
         case .Strip: return StripNormalizer(config: config)
-        default: throw TokenizerError.mismatchedConfig("Unsupported Normalizer type: \(typeName)")
+        default: throw TokenizerError.unsupportedComponent(kind: "Normalizer", type: typeName)
         }
     }
 }
@@ -78,7 +78,7 @@ class NormalizerSequence: Normalizer {
 
     required init(config: Config) throws {
         guard let configs = config.normalizers.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `normalizers` in Sequence normalizer configuration")
+            throw TokenizerError.missingConfigField(field: "normalizers", component: "Sequence normalizer")
         }
         normalizers = try configs.compactMap { try NormalizerFactory.fromConfig(config: $0) }
     }
@@ -354,10 +354,14 @@ extension StringReplacePattern {
             return StringReplacePattern.string(pattern: pattern, replacement: replacement)
         }
         if let pattern = config.pattern.Regex.string() {
-            guard let regexp = try? NSRegularExpression(pattern: pattern, options: []) else {
-                throw TokenizerError.mismatchedConfig("Invalid regex pattern in normalizer configuration: \(pattern)")
+            do {
+                let regexp = try NSRegularExpression(pattern: pattern, options: [])
+                return StringReplacePattern.regexp(regexp: regexp, replacement: replacement)
+            } catch {
+                throw TokenizerError.mismatchedConfig(
+                    "Invalid regex pattern '\(pattern)' in normalizer configuration: \(error.localizedDescription)"
+                )
             }
-            return StringReplacePattern.regexp(regexp: regexp, replacement: replacement)
         }
         return nil
     }

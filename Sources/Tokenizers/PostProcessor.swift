@@ -58,7 +58,7 @@ struct PostProcessorFactory {
         case .RobertaProcessing: return try RobertaProcessing(config: config)
         case .BertProcessing: return try BertProcessing(config: config)
         case .Sequence: return try SequenceProcessing(config: config)
-        default: throw TokenizerError.mismatchedConfig("Unsupported PostProcessor type: \(typeName)")
+        default: throw TokenizerError.unsupportedComponent(kind: "PostProcessor", type: typeName)
         }
     }
 }
@@ -69,10 +69,10 @@ class TemplateProcessing: PostProcessor {
 
     required init(config: Config) throws {
         guard let single = config.single.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `single` in TemplateProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "single", component: "TemplateProcessing")
         }
         guard let pair = config.pair.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `pair` in TemplateProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "pair", component: "TemplateProcessing")
         }
 
         self.single = single
@@ -113,10 +113,10 @@ class RobertaProcessing: PostProcessor {
 
     required init(config: Config) throws {
         guard let sep = config.sep.token() else {
-            throw TokenizerError.mismatchedConfig("Missing `sep` in RobertaProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "sep", component: "RobertaProcessing")
         }
         guard let cls = config.cls.token() else {
-            throw TokenizerError.mismatchedConfig("Missing `cls` in RobertaProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "cls", component: "RobertaProcessing")
         }
         self.sep = sep
         self.cls = cls
@@ -174,10 +174,10 @@ class BertProcessing: PostProcessor {
 
     required init(config: Config) throws {
         guard let sep = config.sep.token() else {
-            throw TokenizerError.mismatchedConfig("Missing `sep` in BertProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "sep", component: "BertProcessing")
         }
         guard let cls = config.cls.token() else {
-            throw TokenizerError.mismatchedConfig("Missing `cls` in BertProcessing configuration")
+            throw TokenizerError.missingConfigField(field: "cls", component: "BertProcessing")
         }
         self.sep = sep
         self.cls = cls
@@ -200,7 +200,7 @@ class SequenceProcessing: PostProcessor {
 
     required init(config: Config) throws {
         guard let processorConfigs = config.processors.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `processors` in Sequence post-processor configuration")
+            throw TokenizerError.missingConfigField(field: "processors", component: "Sequence post-processor")
         }
 
         processors = try processorConfigs.compactMap { try PostProcessorFactory.fromConfig(config: $0) }

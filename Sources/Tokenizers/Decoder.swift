@@ -60,7 +60,7 @@ struct DecoderFactory {
         case .Strip: return try StripDecoder(config: config)
         case .Metaspace: return MetaspaceDecoder(config: config)
         case .WordPiece: return try WordPieceDecoder(config: config)
-        default: throw TokenizerError.mismatchedConfig("Unsupported Decoder type: \(typeName)")
+        default: throw TokenizerError.unsupportedComponent(kind: "Decoder", type: typeName)
         }
     }
 }
@@ -74,7 +74,7 @@ class WordPieceDecoder: Decoder {
 
     required init(config: Config) throws {
         guard let prefix = config.prefix.string() else {
-            throw TokenizerError.mismatchedConfig("Missing `prefix` in WordPieceDecoder configuration")
+            throw TokenizerError.missingConfigField(field: "prefix", component: "WordPieceDecoder")
         }
         self.prefix = prefix
         cleanup = config.cleanup.boolean(or: false)
@@ -102,7 +102,7 @@ class DecoderSequence: Decoder {
 
     required init(config: Config) throws {
         guard let configs = config.decoders.array() else {
-            throw TokenizerError.mismatchedConfig("Missing `decoders` in Sequence decoder configuration")
+            throw TokenizerError.missingConfigField(field: "decoders", component: "Sequence decoder")
         }
         decoders = try configs.compactMap { try DecoderFactory.fromConfig(config: $0) }
     }
@@ -217,13 +217,13 @@ class StripDecoder: Decoder {
 
     required init(config: Config) throws {
         guard let content = config.content.string() else {
-            throw TokenizerError.mismatchedConfig("Missing `content` in StripDecoder configuration")
+            throw TokenizerError.missingConfigField(field: "content", component: "StripDecoder")
         }
         guard let start = config.start.integer() else {
-            throw TokenizerError.mismatchedConfig("Missing `start` in StripDecoder configuration")
+            throw TokenizerError.missingConfigField(field: "start", component: "StripDecoder")
         }
         guard let stop = config.stop.integer() else {
-            throw TokenizerError.mismatchedConfig("Missing `stop` in StripDecoder configuration")
+            throw TokenizerError.missingConfigField(field: "stop", component: "StripDecoder")
         }
         self.content = content
         self.start = start
