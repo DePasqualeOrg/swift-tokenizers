@@ -248,7 +248,7 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         } else {
             // Fallback: parse vocab and merges from Config
             guard let configMerges = Self.mergesFromConfig(tokenizerData.model.merges) else {
-                fatalError("BPETokenizer requires merges")
+                throw TokenizerError.mismatchedConfig("BPETokenizer requires merges")
             }
             guard let configVocab = tokenizerData.model.vocab.dictionary() else {
                 throw TokenizerError.missingVocab

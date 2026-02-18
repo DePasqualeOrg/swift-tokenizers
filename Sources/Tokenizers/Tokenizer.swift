@@ -529,7 +529,7 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         tokenizerConfig: Config,
         tokenizerData: Config,
         model: TokenizingModel
-    ) {
+    ) throws {
         self.model = model
 
         let parsed = Self.parseAddedTokens(from: tokenizerData)
@@ -553,10 +553,10 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         }.joined(separator: "|")
         addedTokensRegex = try? NSRegularExpression(pattern: addedTokensRegexString, options: [])
 
-        preTokenizer = PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
-        normalizer = NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
-        postProcessor = PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
-        decoder = DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: self.addedTokens)
+        preTokenizer = try PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
+        normalizer = try NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
+        postProcessor = try PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
+        decoder = try DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: self.addedTokens)
         cleanUpTokenizationSpaces = tokenizerConfig.cleanUpTokenizationSpaces.boolean(or: true)
         self.tokenizerConfig = tokenizerConfig
     }
@@ -582,7 +582,7 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
             strict: strict
         )
 
-        return PreTrainedTokenizer(
+        return try PreTrainedTokenizer(
             tokenizerConfig: tokenizerConfig,
             tokenizerData: tokenizerData,
             model: model
@@ -1093,7 +1093,7 @@ class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
     /// Returns updated config, or nil if the existing post-processor is already correct.
     private static func updatedPostProcessorConfig(tokenizerConfig: Config, processorConfig: Config?) throws -> Config? {
         // If it's already a Template processor (instead of a ByteLevel one), assume it's correct
-        let postProcessor = PostProcessorFactory.fromConfig(config: processorConfig)
+        let postProcessor = try PostProcessorFactory.fromConfig(config: processorConfig)
         guard !(postProcessor is TemplateProcessing) else { return nil }
 
         let addBosToken = tokenizerConfig.addBosToken.boolean(or: false)
@@ -1137,9 +1137,9 @@ class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
         tokenizerData: Config,
         model: TokenizingModel,
         isLegacy: Bool
-    ) {
+    ) throws {
         self.isLegacy = isLegacy
-        super.init(tokenizerConfig: tokenizerConfig, tokenizerData: tokenizerData, model: model)
+        try super.init(tokenizerConfig: tokenizerConfig, tokenizerData: tokenizerData, model: model)
     }
 
     /// Async factory that builds model with parallel dictionary building.
@@ -1170,7 +1170,7 @@ class LlamaPreTrainedTokenizer: PreTrainedTokenizer, @unchecked Sendable {
             strict: strict
         )
 
-        return LlamaPreTrainedTokenizer(
+        return try LlamaPreTrainedTokenizer(
             tokenizerConfig: tokenizerConfig,
             tokenizerData: updatedData,
             model: model,

@@ -25,9 +25,9 @@ struct DecoderTests {
     }
 
     @Test("WordPiece decoder with prefix and cleanup")
-    func wordPieceDecoder() {
+    func wordPieceDecoder() throws {
         let config = Config(["prefix": "##", "cleanup": true])
-        let decoder = WordPieceDecoder(config: config)
+        let decoder = try WordPieceDecoder(config: config)
 
         let testCases: [([String], String)] = [
             (["##inter", "##national", "##ization"], "##internationalization"),

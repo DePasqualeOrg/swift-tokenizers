@@ -55,7 +55,8 @@ public protocol PreTokenizer {
     /// Initializes the pre-tokenizer from configuration.
     ///
     /// - Parameter config: The configuration for this pre-tokenizer
-    init(config: Config)
+    /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
+    init(config: Config) throws
 }
 
 extension PreTokenizer {
@@ -87,12 +88,12 @@ enum PreTokenizerType: String {
 }
 
 struct PreTokenizerFactory {
-    static func fromConfig(config: Config?) -> PreTokenizer? {
+    static func fromConfig(config: Config?) throws -> PreTokenizer? {
         guard let config else { return nil }
         guard let typeName = config.type.string() else { return nil }
         let type = PreTokenizerType(rawValue: typeName)
         switch type {
-        case .Sequence: return PreTokenizerSequence(config: config)
+        case .Sequence: return try PreTokenizerSequence(config: config)
         case .ByteLevel: return ByteLevelPreTokenizer(config: config)
         case .Punctuation: return PunctuationPreTokenizer(config: config)
         case .Digits: return DigitsPreTokenizer(config: config)
@@ -100,7 +101,7 @@ struct PreTokenizerFactory {
         case .Whitespace, .WhitespaceSplit: return WhitespacePreTokenizer(config: config)
         case .Metaspace: return MetaspacePreTokenizer(config: config)
         case .BertPreTokenizer: return BertPreTokenizer(config: config)
-        default: fatalError("Unsupported PreTokenizer type: \(typeName)")
+        default: throw TokenizerError.mismatchedConfig("Unsupported PreTokenizer type: \(typeName)")
         }
     }
 }
@@ -121,9 +122,11 @@ class BertPreTokenizer: PreTokenizer {
 class PreTokenizerSequence: PreTokenizer {
     let preTokenizers: [PreTokenizer]
 
-    required init(config: Config) {
-        guard let configs = config.pretokenizers.array() else { fatalError("No pretokenizers in Sequence") }
-        preTokenizers = configs.compactMap { PreTokenizerFactory.fromConfig(config: $0) }
+    required init(config: Config) throws {
+        guard let configs = config.pretokenizers.array() else {
+            throw TokenizerError.mismatchedConfig("Missing `pretokenizers` in Sequence pre-tokenizer configuration")
+        }
+        preTokenizers = try configs.compactMap { try PreTokenizerFactory.fromConfig(config: $0) }
     }
 
     func preTokenize(text: String, options: PreTokenizerOptions = [.firstSection]) -> [String] {

@@ -329,10 +329,10 @@ struct LoadingBenchmarks {
                 guard let content = addedToken.content.string() else { continue }
                 addedTokens[content] = id
             }
-            let _ = PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
-            let _ = NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
-            let _ = PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
-            let _ = DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: Set(addedTokens.keys))
+            let _ = try PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
+            let _ = try NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
+            let _ = try PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
+            let _ = try DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: Set(addedTokens.keys))
             let unwrappedAddedTokens: [(content: String, prefix: Bool, suffix: Bool)] = (tokenizerData["addedTokens"].array(or: [])).compactMap { addedToken -> (String, Bool, Bool)? in
                 guard let content = addedToken.content.string() else { return nil }
                 let prefix = addedToken["lstrip"].boolean(or: false)
