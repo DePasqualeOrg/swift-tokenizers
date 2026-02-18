@@ -8,7 +8,7 @@ import Testing
 @Suite("Normalizer Tests")
 struct NormalizerTests {
     @Test("Lowercase normalizer functionality")
-    func lowercaseNormalizer() {
+    func lowercaseNormalizer() throws {
         let testCases: [(String, String)] = [
             ("Café", "café"),
             ("François", "françois"),
@@ -28,11 +28,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.Lowercase.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? LowercaseNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? LowercaseNormalizer != nil)
     }
 
     @Test("NFD normalizer functionality")
-    func nfdNormalizer() {
+    func nfdNormalizer() throws {
         let testCases: [(String, String)] = [
             ("caf\u{65}\u{301}", "cafe\u{301}"),
             ("François", "François"),
@@ -52,11 +52,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.NFD.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? NFDNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? NFDNormalizer != nil)
     }
 
     @Test("NFC normalizer functionality")
-    func nfcNormalizer() {
+    func nfcNormalizer() throws {
         let testCases: [(String, String)] = [
             ("café", "café"),
             ("François", "François"),
@@ -76,11 +76,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.NFC.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? NFCNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? NFCNormalizer != nil)
     }
 
     @Test("NFKD normalizer functionality")
-    func nfkdNormalizer() {
+    func nfkdNormalizer() throws {
         let testCases: [(String, String)] = [
             ("café", "cafe\u{301}"),
             ("François", "François"),
@@ -100,11 +100,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.NFKD.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? NFKDNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? NFKDNormalizer != nil)
     }
 
     @Test("NFKC normalizer functionality")
-    func nfkcNormalizer() {
+    func nfkcNormalizer() throws {
         let testCases: [(String, String)] = [
             ("café", "café"),
             ("François", "François"),
@@ -124,7 +124,7 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.NFKC.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? NFKCNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? NFKCNormalizer != nil)
     }
 
     @Test("Strip accents functionality")
@@ -142,7 +142,7 @@ struct NormalizerTests {
     }
 
     @Test("Bert normalizer functionality")
-    func bertNormalizer() {
+    func bertNormalizer() throws {
         let testCases: [(String, String)] = [
             ("Café", "café"),
             ("François", "françois"),
@@ -162,11 +162,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.Bert.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? BertNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? BertNormalizer != nil)
     }
 
     @Test("Bert normalizer defaults functionality")
-    func bertNormalizerDefaults() {
+    func bertNormalizerDefaults() throws {
         // Python verification: t._tokenizer.normalizer.normalize_str("Café")
         let testCases: [(String, String)] = [
             ("Café", "cafe"),
@@ -187,11 +187,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.Bert.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? BertNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? BertNormalizer != nil)
     }
 
     @Test("Precompiled normalizer functionality")
-    func precompiledNormalizer() {
+    func precompiledNormalizer() throws {
         let testCases: [(String, String)] = [
             ("café", "café"),
             ("François", "François"),
@@ -213,11 +213,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.Precompiled.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? PrecompiledNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? PrecompiledNormalizer != nil)
     }
 
     @Test("Strip accents normalizer functionality")
-    func stripAccentsNormalizer() {
+    func stripAccentsNormalizer() throws {
         let testCases: [(String, String)] = [
             ("café", "café"),
             ("François", "François"),
@@ -237,11 +237,11 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.StripAccents.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? StripAccentsNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? StripAccentsNormalizer != nil)
     }
 
     @Test("Strip normalizer functionality")
-    func stripNormalizer() {
+    func stripNormalizer() throws {
         let testCases: [(String, String, Bool, Bool)] = [
             ("  hello  ", "hello", true, true),
             ("  hello  ", "hello  ", true, false),
@@ -263,6 +263,36 @@ struct NormalizerTests {
         }
 
         let config = Config(["type": NormalizerType.Strip.rawValue])
-        #expect(NormalizerFactory.fromConfig(config: config) as? StripNormalizer != nil)
+        #expect(try NormalizerFactory.fromConfig(config: config) as? StripNormalizer != nil)
+    }
+
+    @Suite("Normalizer error handling")
+    struct NormalizerErrorTests {
+        @Test("Unsupported normalizer type throws unsupportedComponent")
+        func unsupportedNormalizerType() throws {
+            let config = Config(["type": "NonExistentNormalizer"])
+            #expect(throws: TokenizerError.unsupportedComponent(kind: "Normalizer", type: "NonExistentNormalizer")) {
+                try NormalizerFactory.fromConfig(config: config)
+            }
+        }
+
+        @Test("Sequence normalizer throws on missing normalizers")
+        func sequenceMissingNormalizers() throws {
+            let config = Config(["type": "Sequence"])
+            #expect(throws: TokenizerError.missingConfigField(field: "normalizers", component: "Sequence normalizer")) {
+                try NormalizerSequence(config: config)
+            }
+        }
+
+        @Test("Invalid regex pattern throws mismatchedConfig")
+        func invalidRegexPattern() throws {
+            let config = Config([
+                "content": "replacement",
+                "pattern": ["Regex": "[invalid("],
+            ])
+            #expect(throws: TokenizerError.self) {
+                try ReplaceNormalizer(config: config)
+            }
+        }
     }
 }

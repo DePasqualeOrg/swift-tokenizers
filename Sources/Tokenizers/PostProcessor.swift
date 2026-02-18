@@ -29,7 +29,8 @@ public protocol PostProcessor {
     /// Initializes the post-processor from configuration.
     ///
     /// - Parameter config: The configuration for this post-processor
-    init(config: Config)
+    /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
+    init(config: Config) throws
 }
 
 extension PostProcessor {
@@ -47,17 +48,17 @@ enum PostProcessorType: String {
 }
 
 struct PostProcessorFactory {
-    static func fromConfig(config: Config?) -> PostProcessor? {
+    static func fromConfig(config: Config?) throws -> PostProcessor? {
         guard let config else { return nil }
         guard let typeName = config.type.string() else { return nil }
         let type = PostProcessorType(rawValue: typeName)
         switch type {
-        case .TemplateProcessing: return TemplateProcessing(config: config)
+        case .TemplateProcessing: return try TemplateProcessing(config: config)
         case .ByteLevel: return ByteLevelPostProcessor(config: config)
-        case .RobertaProcessing: return RobertaProcessing(config: config)
-        case .BertProcessing: return BertProcessing(config: config)
-        case .Sequence: return SequenceProcessing(config: config)
-        default: fatalError("Unsupported PostProcessor type: \(typeName)")
+        case .RobertaProcessing: return try RobertaProcessing(config: config)
+        case .BertProcessing: return try BertProcessing(config: config)
+        case .Sequence: return try SequenceProcessing(config: config)
+        default: throw TokenizerError.unsupportedComponent(kind: "PostProcessor", type: typeName)
         }
     }
 }
@@ -66,9 +67,13 @@ class TemplateProcessing: PostProcessor {
     let single: [Config]
     let pair: [Config]
 
-    required init(config: Config) {
-        guard let single = config.single.array() else { fatalError("Missing `single` processor configuration") }
-        guard let pair = config.pair.array() else { fatalError("Missing `pair` processor configuration") }
+    required init(config: Config) throws {
+        guard let single = config.single.array() else {
+            throw TokenizerError.missingConfigField(field: "single", component: "TemplateProcessing")
+        }
+        guard let pair = config.pair.array() else {
+            throw TokenizerError.missingConfigField(field: "pair", component: "TemplateProcessing")
+        }
 
         self.single = single
         self.pair = pair
@@ -106,9 +111,13 @@ class RobertaProcessing: PostProcessor {
     /// Keep one space character on each side. Depends on `trimOffsets` being `true`.
     private let addPrefixSpace: Bool
 
-    required init(config: Config) {
-        guard let sep = config.sep.token() else { fatalError("Missing `sep` processor configuration") }
-        guard let cls = config.cls.token() else { fatalError("Missing `cls` processor configuration") }
+    required init(config: Config) throws {
+        guard let sep = config.sep.token() else {
+            throw TokenizerError.missingConfigField(field: "sep", component: "RobertaProcessing")
+        }
+        guard let cls = config.cls.token() else {
+            throw TokenizerError.missingConfigField(field: "cls", component: "RobertaProcessing")
+        }
         self.sep = sep
         self.cls = cls
         trimOffset = config.trimOffset.boolean(or: true)
@@ -163,9 +172,13 @@ class BertProcessing: PostProcessor {
     private let sep: (UInt, String)
     private let cls: (UInt, String)
 
-    required init(config: Config) {
-        guard let sep = config.sep.token() else { fatalError("Missing `sep` processor configuration") }
-        guard let cls = config.cls.token() else { fatalError("Missing `cls` processor configuration") }
+    required init(config: Config) throws {
+        guard let sep = config.sep.token() else {
+            throw TokenizerError.missingConfigField(field: "sep", component: "BertProcessing")
+        }
+        guard let cls = config.cls.token() else {
+            throw TokenizerError.missingConfigField(field: "cls", component: "BertProcessing")
+        }
         self.sep = sep
         self.cls = cls
     }
@@ -185,12 +198,12 @@ class BertProcessing: PostProcessor {
 class SequenceProcessing: PostProcessor {
     private let processors: [PostProcessor]
 
-    required init(config: Config) {
+    required init(config: Config) throws {
         guard let processorConfigs = config.processors.array() else {
-            fatalError("Missing `processors` configuration")
+            throw TokenizerError.missingConfigField(field: "processors", component: "Sequence post-processor")
         }
 
-        processors = processorConfigs.compactMap { PostProcessorFactory.fromConfig(config: $0) }
+        processors = try processorConfigs.compactMap { try PostProcessorFactory.fromConfig(config: $0) }
     }
 
     func postProcess(tokens: [String], tokensPair: [String]?, addSpecialTokens: Bool = true) -> [String] {

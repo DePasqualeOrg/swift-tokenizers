@@ -23,7 +23,8 @@ public protocol Decoder {
     /// Initializes the decoder from configuration.
     ///
     /// - Parameter config: The configuration for this decoder
-    init(config: Config)
+    /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
+    init(config: Config) throws
 }
 
 extension Decoder {
@@ -45,21 +46,21 @@ enum DecoderType: String {
 }
 
 struct DecoderFactory {
-    static func fromConfig(config: Config?, addedTokens: Set<String>? = nil) -> Decoder? {
+    static func fromConfig(config: Config?, addedTokens: Set<String>? = nil) throws -> Decoder? {
         // TODO: not sure if we need to include `addedTokens` in all the decoder initializers (and the protocol)
         guard let config else { return nil }
         guard let typeName = config.type.string() else { return nil }
         let type = DecoderType(rawValue: typeName)
         switch type {
-        case .Sequence: return DecoderSequence(config: config)
+        case .Sequence: return try DecoderSequence(config: config)
         case .ByteLevel: return ByteLevelDecoder(config: config, addedTokens: addedTokens)
-        case .Replace: return ReplaceDecoder(config: config)
+        case .Replace: return try ReplaceDecoder(config: config)
         case .ByteFallback: return ByteFallbackDecoder(config: config)
         case .Fuse: return FuseDecoder(config: config)
-        case .Strip: return StripDecoder(config: config)
+        case .Strip: return try StripDecoder(config: config)
         case .Metaspace: return MetaspaceDecoder(config: config)
-        case .WordPiece: return WordPieceDecoder(config: config)
-        default: fatalError("Unsupported Decoder type: \(typeName)")
+        case .WordPiece: return try WordPieceDecoder(config: config)
+        default: throw TokenizerError.unsupportedComponent(kind: "Decoder", type: typeName)
         }
     }
 }
@@ -71,8 +72,10 @@ class WordPieceDecoder: Decoder {
     /// https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/decoders/wordpiece.rs#L31
     private let re = try! NSRegularExpression(pattern: "\\s(\\.|\\?|\\!|\\,|'\\s|n't|'m|'s|'ve|'re)", options: [])
 
-    required init(config: Config) {
-        guard let prefix = config.prefix.string() else { fatalError("Missing `prefix` configuration for WordPieceDecoder.") }
+    required init(config: Config) throws {
+        guard let prefix = config.prefix.string() else {
+            throw TokenizerError.missingConfigField(field: "prefix", component: "WordPieceDecoder")
+        }
         self.prefix = prefix
         cleanup = config.cleanup.boolean(or: false)
     }
@@ -97,9 +100,11 @@ class WordPieceDecoder: Decoder {
 class DecoderSequence: Decoder {
     let decoders: [Decoder]
 
-    required init(config: Config) {
-        guard let configs = config.decoders.array() else { fatalError("No decoders in Sequence") }
-        decoders = configs.compactMap { DecoderFactory.fromConfig(config: $0) }
+    required init(config: Config) throws {
+        guard let configs = config.decoders.array() else {
+            throw TokenizerError.missingConfigField(field: "decoders", component: "Sequence decoder")
+        }
+        decoders = try configs.compactMap { try DecoderFactory.fromConfig(config: $0) }
     }
 
     func decode(tokens: [String]) -> [String] {
@@ -154,8 +159,8 @@ class ByteLevelDecoder: Decoder {
 class ReplaceDecoder: Decoder {
     let pattern: StringReplacePattern?
 
-    required init(config: Config) {
-        pattern = StringReplacePattern.from(config: config)
+    required init(config: Config) throws {
+        pattern = try StringReplacePattern.from(config: config)
     }
 
     func decode(tokens: [String]) -> [String] {
@@ -210,10 +215,16 @@ class StripDecoder: Decoder {
     let start: Int
     let stop: Int
 
-    required init(config: Config) {
-        guard let content = config.content.string() else { fatalError("Incorrect StripDecoder configuration: can't parse `content`.") }
-        guard let start = config.start.integer() else { fatalError("Incorrect StripDecoder configuration: can't parse `start`.") }
-        guard let stop = config.stop.integer() else { fatalError("Incorrect StripDecoder configuration: can't parse `stop`.") }
+    required init(config: Config) throws {
+        guard let content = config.content.string() else {
+            throw TokenizerError.missingConfigField(field: "content", component: "StripDecoder")
+        }
+        guard let start = config.start.integer() else {
+            throw TokenizerError.missingConfigField(field: "start", component: "StripDecoder")
+        }
+        guard let stop = config.stop.integer() else {
+            throw TokenizerError.missingConfigField(field: "stop", component: "StripDecoder")
+        }
         self.content = content
         self.start = start
         self.stop = stop

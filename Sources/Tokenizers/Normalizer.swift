@@ -23,7 +23,8 @@ public protocol Normalizer {
     /// Initializes the normalizer from configuration.
     ///
     /// - Parameter config: The configuration for this normalizer
-    init(config: Config)
+    /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
+    init(config: Config) throws
 }
 
 extension Normalizer {
@@ -50,14 +51,14 @@ enum NormalizerType: String {
 }
 
 struct NormalizerFactory {
-    static func fromConfig(config: Config?) -> Normalizer? {
+    static func fromConfig(config: Config?) throws -> Normalizer? {
         guard let config else { return nil }
         guard let typeName = config.type.string() else { return nil }
         let type = NormalizerType(rawValue: typeName)
         switch type {
-        case .Sequence: return NormalizerSequence(config: config)
+        case .Sequence: return try NormalizerSequence(config: config)
         case .Prepend: return PrependNormalizer(config: config)
-        case .Replace: return ReplaceNormalizer(config: config)
+        case .Replace: return try ReplaceNormalizer(config: config)
         case .Lowercase: return LowercaseNormalizer(config: config)
         case .NFD: return NFDNormalizer(config: config)
         case .NFC: return NFCNormalizer(config: config)
@@ -67,7 +68,7 @@ struct NormalizerFactory {
         case .Precompiled: return PrecompiledNormalizer(config: config)
         case .StripAccents: return StripAccentsNormalizer(config: config)
         case .Strip: return StripNormalizer(config: config)
-        default: fatalError("Unsupported Normalizer type: \(typeName)")
+        default: throw TokenizerError.unsupportedComponent(kind: "Normalizer", type: typeName)
         }
     }
 }
@@ -75,11 +76,11 @@ struct NormalizerFactory {
 class NormalizerSequence: Normalizer {
     let normalizers: [Normalizer]
 
-    required init(config: Config) {
+    required init(config: Config) throws {
         guard let configs = config.normalizers.array() else {
-            fatalError("No normalizers in Sequence")
+            throw TokenizerError.missingConfigField(field: "normalizers", component: "Sequence normalizer")
         }
-        normalizers = configs.compactMap { NormalizerFactory.fromConfig(config: $0) }
+        normalizers = try configs.compactMap { try NormalizerFactory.fromConfig(config: $0) }
     }
 
     func normalize(text: String) -> String {
@@ -104,8 +105,8 @@ class PrependNormalizer: Normalizer {
 class ReplaceNormalizer: Normalizer {
     let pattern: StringReplacePattern?
 
-    required init(config: Config) {
-        pattern = StringReplacePattern.from(config: config)
+    required init(config: Config) throws {
+        pattern = try StringReplacePattern.from(config: config)
     }
 
     func normalize(text: String) -> String {
@@ -347,16 +348,20 @@ extension StringReplacePattern {
 }
 
 extension StringReplacePattern {
-    static func from(config: Config) -> StringReplacePattern? {
+    static func from(config: Config) throws -> StringReplacePattern? {
         guard let replacement = config.content.string() else { return nil }
         if let pattern = config.pattern.String.string() {
             return StringReplacePattern.string(pattern: pattern, replacement: replacement)
         }
         if let pattern = config.pattern.Regex.string() {
-            guard let regexp = try? NSRegularExpression(pattern: pattern, options: []) else {
-                fatalError("Cannot build regexp from \(pattern)")
+            do {
+                let regexp = try NSRegularExpression(pattern: pattern, options: [])
+                return StringReplacePattern.regexp(regexp: regexp, replacement: replacement)
+            } catch {
+                throw TokenizerError.mismatchedConfig(
+                    "Invalid regex pattern '\(pattern)' in normalizer configuration: \(error.localizedDescription)"
+                )
             }
-            return StringReplacePattern.regexp(regexp: regexp, replacement: replacement)
         }
         return nil
     }

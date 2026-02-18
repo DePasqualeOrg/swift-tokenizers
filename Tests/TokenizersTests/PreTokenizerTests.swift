@@ -269,4 +269,23 @@ struct PreTokenizerTests {
             ]
         )
     }
+
+    @Suite("Pre-tokenizer error handling")
+    struct PreTokenizerErrorTests {
+        @Test("Unsupported pre-tokenizer type throws unsupportedComponent")
+        func unsupportedPreTokenizerType() throws {
+            let config = Config(["type": "NonExistentPreTokenizer"])
+            #expect(throws: TokenizerError.unsupportedComponent(kind: "PreTokenizer", type: "NonExistentPreTokenizer")) {
+                try PreTokenizerFactory.fromConfig(config: config)
+            }
+        }
+
+        @Test("Sequence pre-tokenizer throws on missing pretokenizers")
+        func sequenceMissingPretokenizers() throws {
+            let config = Config(["type": "Sequence"])
+            #expect(throws: TokenizerError.missingConfigField(field: "pretokenizers", component: "Sequence pre-tokenizer")) {
+                try PreTokenizerSequence(config: config)
+            }
+        }
+    }
 }
