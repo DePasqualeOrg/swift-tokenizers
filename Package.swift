@@ -13,7 +13,6 @@ let package = Package(
     products: [
         .library(name: "Hub", targets: ["Hub"]),
         .library(name: "Tokenizers", targets: ["Tokenizers"]),
-        .library(name: "Transformers", targets: ["Tokenizers", "Generation", "Models"]),
     ],
     dependencies: [
         .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.0.0"),
@@ -22,7 +21,6 @@ let package = Package(
         .package(url: "https://github.com/ibireme/yyjson.git", exact: "0.12.0"),
     ],
     targets: [
-        .target(name: "Generation", dependencies: ["Tokenizers"]),
         .target(
             name: "Hub",
             dependencies: [
@@ -36,12 +34,9 @@ let package = Package(
             ],
             swiftSettings: swiftSettings
         ),
-        .target(name: "Models", dependencies: ["Tokenizers", "Generation"]),
         .target(name: "Tokenizers", dependencies: ["Hub", .product(name: "Jinja", package: "swift-jinja")]),
         .testTarget(name: "Benchmarks", dependencies: ["Hub", "Tokenizers", .product(name: "yyjson", package: "yyjson")]),
-        .testTarget(name: "GenerationTests", dependencies: ["Generation"]),
         .testTarget(name: "HubTests", dependencies: ["Hub", .product(name: "Jinja", package: "swift-jinja")], swiftSettings: swiftSettings),
-        .testTarget(name: "ModelsTests", dependencies: ["Models", "Hub"], resources: [.process("Resources")]),
-        .testTarget(name: "TokenizersTests", dependencies: ["Tokenizers", "Models", "Hub"], resources: [.process("Resources")]),
+        .testTarget(name: "TokenizersTests", dependencies: ["Tokenizers", "Hub"], resources: [.process("Resources")]),
     ]
 )

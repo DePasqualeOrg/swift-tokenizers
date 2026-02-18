@@ -6,7 +6,6 @@ import Foundation
 import Testing
 
 @testable import Hub
-@testable import Models
 @testable import Tokenizers
 
 private let downloadDestination: URL = {
