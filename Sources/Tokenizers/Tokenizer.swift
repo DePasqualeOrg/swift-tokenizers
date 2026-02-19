@@ -935,13 +935,13 @@ public extension AutoTokenizer {
     /// will be merged into the tokenizer configuration.
     ///
     /// - Parameters:
-    ///   - modelDirectory: Path to a local directory containing tokenizer files
+    ///   - directory: Path to a local directory containing tokenizer files
     ///   - strict: Whether to enforce strict validation of tokenizer types
     /// - Returns: A configured `Tokenizer` instance
     /// - Throws: `TokenizerError` if required files are missing or configuration is invalid
-    static func from(modelDirectory: URL, strict: Bool = true) async throws -> Tokenizer {
+    static func from(directory: URL, strict: Bool = true) async throws -> Tokenizer {
         // Load and parse tokenizer data (required)
-        let tokenizerDataURL = modelDirectory.appending(path: "tokenizer.json")
+        let tokenizerDataURL = directory.appending(path: "tokenizer.json")
         let tokenizerDataRaw: NSDictionary
         do {
             let data = try Data(contentsOf: tokenizerDataURL)
@@ -979,7 +979,7 @@ public extension AutoTokenizer {
         let tokenizerData = Config(parsed as! [NSString: Any])
 
         // Load tokenizer config (optional — some models only have tokenizer.json)
-        let tokenizerConfigURL = modelDirectory.appending(path: "tokenizer_config.json")
+        let tokenizerConfigURL = directory.appending(path: "tokenizer_config.json")
         var tokenizerConfig: Config
         if let data = try? Data(contentsOf: tokenizerConfigURL),
             let parsed = try? YYJSONParser.parseToConfig(data)
@@ -993,7 +993,7 @@ public extension AutoTokenizer {
         // Mirrors Python's AutoTokenizer resolution: check config.json for
         // tokenizer_class directly, then fall back to model_type mapping.
         if tokenizerConfig.tokenizerClass.string() == nil {
-            let modelConfigURL = modelDirectory.appending(path: "config.json")
+            let modelConfigURL = directory.appending(path: "config.json")
             if let modelConfigData = try? Data(contentsOf: modelConfigURL),
                 let modelConfig = try? YYJSONParser.parseToConfig(modelConfigData)
             {
@@ -1018,8 +1018,8 @@ public extension AutoTokenizer {
 
         // Load chat template if available (optional)
         // Prefer .jinja template over .json template
-        let chatTemplateJinjaURL = modelDirectory.appending(path: "chat_template.jinja")
-        let chatTemplateJsonURL = modelDirectory.appending(path: "chat_template.json")
+        let chatTemplateJinjaURL = directory.appending(path: "chat_template.jinja")
+        let chatTemplateJsonURL = directory.appending(path: "chat_template.json")
 
         var chatTemplate: String? = nil
         if FileManager.default.fileExists(atPath: chatTemplateJinjaURL.path) {

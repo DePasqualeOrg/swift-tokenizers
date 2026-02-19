@@ -11,7 +11,7 @@ Load a tokenizer from a local directory containing `tokenizer.json` and `tokeniz
 ```swift
 import Tokenizers
 
-let tokenizer = try await AutoTokenizer.from(modelDirectory: localDirectory)
+let tokenizer = try await AutoTokenizer.from(directory: localDirectory)
 ```
 
 ### Encoding and decoding
@@ -83,5 +83,5 @@ let tokenizer = try await AutoTokenizer.from(pretrained: "model-name", hubApi: h
 let tokenizer = try await AutoTokenizer.from(modelFolder: directory, hubApi: hub)
 
 // After (download tokenizer files to directory first)
-let tokenizer = try await AutoTokenizer.from(modelDirectory: directory)
+let tokenizer = try await AutoTokenizer.from(directory: directory)
 ```
