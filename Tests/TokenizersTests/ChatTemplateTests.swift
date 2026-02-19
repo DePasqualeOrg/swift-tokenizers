@@ -24,7 +24,7 @@ private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) 
         to: downloadDestination.appending(path: "\(model)"),
         matching: matching
     )
-    return try await AutoTokenizer.from(modelDirectory: modelDirectory)
+    return try await AutoTokenizer.from(directory: modelDirectory)
 }
 
 @Suite("Chat Template Tests")

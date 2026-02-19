@@ -164,7 +164,7 @@ struct LoadingBenchmarks {
         print("Benchmarking with \(iterations) iterations...\n")
 
         let times = try await measureAsync(label: "AutoTokenizer.from", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
+            let _ = try await AutoTokenizer.from(directory: modelDirectory)
         }
 
         let s = stats(times)
@@ -228,7 +228,7 @@ struct LoadingBenchmarks {
 
         // --- OPTIMIZED PATH (new way) ---
         let optimizedTimes = try await measureAsync(label: "Optimized (current)", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
+            let _ = try await AutoTokenizer.from(directory: modelDirectory)
         }
 
         let unoptimizedStats = stats(unoptimizedTimes)
@@ -273,7 +273,7 @@ struct LoadingBenchmarks {
 
         // Warmup
         for _ in 0..<2 {
-            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
+            let _ = try await AutoTokenizer.from(directory: modelDirectory)
         }
 
         // Collect times for each stage across iterations

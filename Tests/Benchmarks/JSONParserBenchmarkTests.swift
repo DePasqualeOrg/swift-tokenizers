@@ -223,7 +223,7 @@ struct JSONParserBenchmarkTests {
         print("Benchmarking tokenizer loading with \(iterations) iterations...\n")
 
         let yyjsonTimes = try await measure(label: "yyjson (current)", labelWidth: labelWidth, iterations: iterations) {
-            let _ = try await AutoTokenizer.from(modelDirectory: modelDirectory)
+            let _ = try await AutoTokenizer.from(directory: modelDirectory)
         }
 
         let jsonSerTimes = try await measure(label: "JSONSerialization", labelWidth: labelWidth, iterations: iterations) {
