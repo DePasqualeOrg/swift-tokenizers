@@ -1,73 +1,48 @@
 name: CI
 
 on:
-    # This runs in the context of the base of the pull request,
-    # rather than in the context of the merge commit.
-    # Maintainers must approve and we tighten permissions below.
-    pull_request_target:
+    pull_request:
         types: [opened, synchronize, reopened]
+    push:
+        branches: [main]
+    workflow_dispatch:
 
 permissions:
     contents: read
 
 jobs:
     test:
-        name: Test
-        uses: huggingface/hf-workflows/.github/workflows/swift_transformers_unit_tests.yml@main
-        with:
-            # Use the PR merge ref, not the head.
-            pr_number: ${{ github.event.pull_request.number }}
-        secrets:
-            HF_HUB_READ_TOKEN: ${{ secrets.HF_HUB_READ_TOKEN }}
+        name: Test (macOS)
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v6
+            # Tests run only on macOS. Some tests download models from
+            # Hugging Face Hub, which requires URLSession. On Linux,
+            # FoundationNetworking crashes during URLSession teardown.
+            # See: https://github.com/swiftlang/swift-corelibs-foundation/issues/3675
+            - name: Run tests
+              run: swift test
 
-    test-linux:
-        name: Test (Linux)
+    build-linux:
+        name: Build (Linux)
         runs-on: ubuntu-latest
         container: swift:6.2.3
         steps:
-            - name: Checkout PR merge ref if called from PR
-              if: ${{ github.event.pull_request.number }}
-              uses: actions/checkout@v6
-              with:
-                  ref: refs/pull/${{ github.event.pull_request.number }}/merge
-                  fetch-depth: 0
-
-            - name: Checkout fallback
-              if: ${{ !github.event.pull_request.number }}
-              uses: actions/checkout@v6
+            - uses: actions/checkout@v6
 
             - name: Build
               run: swift build
 
-            - name: Run tests
-              env:
-                  CI_DISABLE_NETWORK_MONITOR: "1"
-                  HF_TOKEN: ${{ secrets.HF_HUB_READ_TOKEN }}
-              # Skip test targets that use URLSession on Linux:
-              # FoundationNetworking has a race condition where curl EasyHandles
-              # can be freed while still in use during URLSession teardown,
-              # causing a crash (libcurl error 43). These tests run on macOS.
-              # See: https://github.com/swiftlang/swift-corelibs-foundation/issues/3675
-              run: swift test --skip HubTests --skip TokenizersTests --skip Benchmarks
+            - name: Build tests
+              run: swift build --build-tests
 
     lint:
         name: Lint
         runs-on: macos-latest
-
         steps:
-            - name: Checkout PR merge ref if called from PR
-              if: ${{ github.event.pull_request.number }}
-              uses: actions/checkout@v6
-              with:
-                  ref: refs/pull/${{ github.event.pull_request.number }}/merge
-                  fetch-depth: 0
+            - uses: actions/checkout@v6
 
-            - name: Checkout fallback
-              if: ${{ !github.event.pull_request.number }}
-              uses: actions/checkout@v6
-
-            - run: |
-                  swift format lint --strict --recursive .
+            - run: swift format lint --strict --recursive .
 
             - name: Suggest fixes (if check fails)
               if: failure()
