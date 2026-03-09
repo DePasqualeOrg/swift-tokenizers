@@ -2,7 +2,7 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import HuggingFace
+import HFAPI
 import Testing
 
 @testable import Tokenizers
@@ -18,8 +18,8 @@ private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config
 private func downloadModel(_ model: Repo.ID) async throws -> URL {
     try await hubClient.downloadSnapshot(
         of: model,
-        to: downloadDestination.appending(path: "\(model)"),
-        matching: tokenizerFiles
+        matching: tokenizerFiles,
+        to: downloadDestination.appending(path: "\(model)")
     )
 }
 

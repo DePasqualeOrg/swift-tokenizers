@@ -2,7 +2,7 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-import HuggingFace
+import HFAPI
 import Testing
 
 @testable import Tokenizers
@@ -21,8 +21,8 @@ private let tokenizerAndChatTemplateFiles = [
 private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
     let modelDirectory = try await hubClient.downloadSnapshot(
         of: model,
-        to: downloadDestination.appending(path: "\(model)"),
-        matching: matching
+        matching: matching,
+        to: downloadDestination.appending(path: "\(model)")
     )
     return try await AutoTokenizer.from(directory: modelDirectory)
 }

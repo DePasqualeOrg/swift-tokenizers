@@ -3,7 +3,7 @@
 // Based on GPT2TokenizerTests by Julien Chaumond.
 
 import Foundation
-import HuggingFace
+import HFAPI
 import Testing
 
 @testable import Tokenizers
@@ -63,8 +63,8 @@ private func downloadModel(_ modelName: String) async throws -> URL {
     }
     return try await hubClient.downloadSnapshot(
         of: repoId,
-        to: downloadDestination.appending(path: modelName),
-        matching: tokenizerFiles
+        matching: tokenizerFiles,
+        to: downloadDestination.appending(path: modelName)
     )
 }
 

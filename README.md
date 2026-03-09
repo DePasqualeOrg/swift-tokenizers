@@ -1,6 +1,6 @@
 Swift Tokenizers is a streamlined and optimized fork of Swift Transformers that focuses solely on tokenizer functionality. It has no dependency on the Hugging Face Hub: tokenizers are simply loaded from a directory, and downloading is handled separately.
 
-Tokenizer loading performance is [significantly faster](https://github.com/DePasqualeOrg/swift-tokenizers/pull/3) compared to Swift Transformers, dropping from ~1500 ms to ~300 ms (5x faster) on an M3 MacBook Pro.
+Refer to the [Benchmarks](#benchmarks) section to compare the performance of Swift Tokenizers and Swift Transformers.
 
 ## Examples
 
@@ -85,3 +85,20 @@ let tokenizer = try await AutoTokenizer.from(modelFolder: directory, hubApi: hub
 // After (download tokenizer files to directory first)
 let tokenizer = try await AutoTokenizer.from(directory: directory)
 ```
+
+## Benchmarks
+
+The benchmarks use tests from MLX Swift LM and can be run from this package in Xcode.
+
+Set `RUN_BENCHMARKS=1` in the test scheme environment to enable them.
+
+These results were observed on an M3 MacBook Pro.
+
+| Benchmark | Swift Tokenizers median | Swift Transformers median | Swift Tokenizers Performance |
+| --- | ---: | ---: | --- |
+| Tokenizer load | 289.6 ms | 1004.6 ms | 3.47x faster |
+| Tokenization | 53.0 ms | 105.8 ms | 2.00x faster |
+| Decoding | 28.9 ms | 48.4 ms | 1.67x faster |
+| LLM load | 318.8 ms | 1033.5 ms | 3.24x faster |
+| VLM load | 367.9 ms | 1081.5 ms | 2.94x faster |
+| Embedding load | 310.7 ms | 1023.5 ms | 3.29x faster |
