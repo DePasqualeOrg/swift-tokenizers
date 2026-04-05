@@ -1,10 +1,10 @@
-name: Rust Core Release
+name: Publish Rust XCFramework
 
 on:
     workflow_dispatch:
         inputs:
             version:
-                description: Release version used in the artifact filename
+                description: Artifact label used in the filename and release tag suffix
                 required: true
                 type: string
 
@@ -26,6 +26,37 @@ jobs:
             - name: Package release artifact
               run: bash scripts/package-rust-core-release.sh "${{ inputs.version }}"
 
+            - name: Publish GitHub prerelease assets
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  VERSION: ${{ inputs.version }}
+                  TARGET_REF: ${{ github.ref_name }}
+              run: |
+                  set -euo pipefail
+
+                  tag="rust-core-${VERSION}"
+                  title="Rust core artifact for ${VERSION}"
+                  archive="Artifacts/TokenizersRustCore-${VERSION}.xcframework.zip"
+                  checksum="${archive}.checksum"
+                  notes="Prebuilt Rust core XCFramework artifact for ${TARGET_REF}."
+
+                  if gh release view "${tag}" >/dev/null 2>&1; then
+                      gh release upload "${tag}" "${archive}" "${checksum}" --clobber
+                  else
+                      gh release create "${tag}" "${archive}" "${checksum}" \
+                          --target "${TARGET_REF}" \
+                          --title "${title}" \
+                          --notes "${notes}" \
+                          --prerelease
+                  fi
+
+                  release_url="$(gh release view "${tag}" --json url --jq '.url')"
+                  {
+                      echo "### Published release"
+                      echo
+                      echo "- ${release_url}"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
             - name: Upload workflow artifact
               uses: actions/upload-artifact@v6
               with:
@@ -33,4 +64,3 @@ jobs:
                   path: |
                       Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip
                       Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip.checksum
-

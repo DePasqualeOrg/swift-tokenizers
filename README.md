@@ -53,7 +53,7 @@ bash scripts/build-rust-core-xcframework.sh
 The repository also includes:
 
 - `scripts/package-rust-core-release.sh` to zip the XCFramework and compute the SwiftPM checksum
-- `.github/workflows/rust-core-release.yml` to build the release artifact in CI
+- `.github/workflows/rust-core-release.yml` to build the release artifact in CI and publish it as a GitHub prerelease asset
 
 ## Examples
 
