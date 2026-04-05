@@ -13,7 +13,13 @@ enum DownloaderBridgeError: LocalizedError {
     }
 }
 
-extension HubClient: @retroactive Downloader {
+struct HubClientDownloader: Downloader, @unchecked Sendable {
+    private let upstream: HubClient
+
+    init(_ upstream: HubClient) {
+        self.upstream = upstream
+    }
+
     public func download(
         id: String,
         revision: String?,
