@@ -8,11 +8,11 @@ struct BenchmarkTokenizerBackend {
 }
 
 func activeBenchmarkTokenizerBackend() -> BenchmarkTokenizerBackend {
-#if Rust
+    #if Rust
     BenchmarkTokenizerBackend(label: "rust-trait build", loader: TokenizersLoader())
-#else
+    #else
     BenchmarkTokenizerBackend(label: "swift build", loader: TokenizersLoader())
-#endif
+    #endif
 }
 
 struct TokenizerBridge: MLXLMCommon.Tokenizer {

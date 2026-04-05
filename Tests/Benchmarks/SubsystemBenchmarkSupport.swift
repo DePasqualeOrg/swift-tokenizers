@@ -91,7 +91,7 @@ func benchmarkSidecarLoading(
     #endif
 
     var times: [Double] = []
-    for i in 1 ... runs {
+    for i in 1...runs {
         let start = CFAbsoluteTimeGetCurrent()
         #if Rust
         _ = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
@@ -137,7 +137,7 @@ func benchmarkTokenizerCoreLoading(
     #endif
 
     var times: [Double] = []
-    for i in 1 ... runs {
+    for i in 1...runs {
         let start = CFAbsoluteTimeGetCurrent()
         #if Rust
         _ = try await RustAutoTokenizerDirectoryLoader.loadTokenizerCore(
@@ -200,7 +200,7 @@ func benchmarkChatTemplateRendering(
     _ = try tokenizer.renderChatTemplateToString(template: template, contextObject: contextObject)
 
     var times: [Double] = []
-    for i in 1 ... runs {
+    for i in 1...runs {
         let start = CFAbsoluteTimeGetCurrent()
         let rendered = try tokenizer.renderChatTemplateToString(
             template: template,

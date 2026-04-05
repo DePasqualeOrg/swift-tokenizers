@@ -111,13 +111,15 @@ package enum JSONBridge {
         case is NSNull:
             return NSNull()
         case let value as [String: any Sendable]:
-            return try Dictionary(uniqueKeysWithValues: value.map { key, nestedValue in
-                (key, try foundationObject(from: nestedValue))
-            })
+            return try Dictionary(
+                uniqueKeysWithValues: value.map { key, nestedValue in
+                    (key, try foundationObject(from: nestedValue))
+                })
         case let value as [String: Any]:
-            return try Dictionary(uniqueKeysWithValues: value.map { key, nestedValue in
-                (key, try foundationObject(from: nestedValue))
-            })
+            return try Dictionary(
+                uniqueKeysWithValues: value.map { key, nestedValue in
+                    (key, try foundationObject(from: nestedValue))
+                })
         case let value as [any Sendable]:
             return try value.map { try foundationObject(from: $0) }
         case let value as [Any]:
@@ -443,7 +445,8 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
     package func cleanUp(text: String) -> String {
         guard runtimeConfiguration.cleanUpTokenizationSpaces else { return text }
 
-        return text
+        return
+            text
             .replacingOccurrences(of: " .", with: ".")
             .replacingOccurrences(of: " ?", with: "?")
             .replacingOccurrences(of: " !", with: "!")

@@ -1,7 +1,7 @@
 import BenchmarkHelpers
+import Foundation
 import HFAPI
 import Testing
-import Foundation
 
 private let benchmarksEnabled = ProcessInfo.processInfo.environment["RUN_BENCHMARKS"] == "1"
 private let modelBenchmarksEnabled = ProcessInfo.processInfo.environment["RUN_MODEL_BENCHMARKS"] == "1"

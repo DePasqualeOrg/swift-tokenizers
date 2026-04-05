@@ -22,11 +22,11 @@ private typealias TemplateMessage = Tokenizers.Message
 private typealias TemplateToolSpec = Tokenizers.ToolSpec
 
 private func backendValue<T>(swift: T, rust: T) -> T {
-#if Rust
+    #if Rust
     rust
-#else
+    #else
     swift
-#endif
+    #endif
 }
 
 private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {

@@ -88,11 +88,14 @@ package final class RustProxyModel: TokenizingModel, @unchecked Sendable {
         eosToken = descriptor.runtimeConfiguration.eosToken
         unknownToken = descriptor.runtimeConfiguration.unknownToken
         fuseUnknownTokens = descriptor.runtimeConfiguration.fuseUnknownTokens
-        bosTokenId = descriptor.bosTokenId
+        bosTokenId =
+            descriptor.bosTokenId
             ?? bosToken.flatMap { try? RustTokenizerBackend.convertTokenToId(handle: handle, token: $0) }
-        eosTokenId = descriptor.eosTokenId
+        eosTokenId =
+            descriptor.eosTokenId
             ?? eosToken.flatMap { try? RustTokenizerBackend.convertTokenToId(handle: handle, token: $0) }
-        unknownTokenId = descriptor.unknownTokenId
+        unknownTokenId =
+            descriptor.unknownTokenId
             ?? unknownToken.flatMap { try? RustTokenizerBackend.convertTokenToId(handle: handle, token: $0) }
     }
 

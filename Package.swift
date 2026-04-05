@@ -27,7 +27,7 @@ let tokenizerSwiftBackendSources = [
 ]
 
 let tokenizerRustBackendSources = [
-    "RustBackedTokenizer.swift",
+    "RustBackedTokenizer.swift"
 ]
 
 let tokenizerDirectorySources =
@@ -48,7 +48,7 @@ let package = Package(
     traits: [
         .default(enabledTraits: ["Swift"]),
         .trait(name: "Swift"),
-        .trait(name: "Rust")
+        .trait(name: "Rust"),
     ],
     dependencies: [
         .package(path: "RustCorePackage"),
@@ -63,8 +63,7 @@ let package = Package(
     targets: [
         .target(
             name: "TokenizersCore",
-            dependencies: [
-            ],
+            dependencies: [],
             path: "Sources/Tokenizers",
             exclude: excludedTokenizerSources(keeping: tokenizerCoreSources),
             sources: tokenizerCoreSources
@@ -106,7 +105,7 @@ let package = Package(
             path: "Sources/TokenizersFacade",
             swiftSettings: [
                 .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
-                .define("Rust", .when(traits: ["Rust"]))
+                .define("Rust", .when(traits: ["Rust"])),
             ]
         ),
         .testTarget(
@@ -122,7 +121,7 @@ let package = Package(
             ],
             swiftSettings: [
                 .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
-                .define("Rust", .when(traits: ["Rust"]))
+                .define("Rust", .when(traits: ["Rust"])),
             ]
         ),
         .testTarget(
@@ -137,7 +136,7 @@ let package = Package(
             resources: [.process("Resources")],
             swiftSettings: [
                 .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
-                .define("Rust", .when(traits: ["Rust"]))
+                .define("Rust", .when(traits: ["Rust"])),
             ]
         ),
     ]

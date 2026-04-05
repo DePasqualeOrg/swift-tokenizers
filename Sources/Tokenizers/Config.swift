@@ -837,9 +837,10 @@ extension Config {
         case let .floating(value):
             return Double(value)
         case let .dictionary(values):
-            return Dictionary(uniqueKeysWithValues: values.map { key, value in
-                (key.string, value.foundationObject())
-            })
+            return Dictionary(
+                uniqueKeysWithValues: values.map { key, value in
+                    (key.string, value.foundationObject())
+                })
         case let .array(values):
             return values.map { $0.foundationObject() }
         case let .token(value):

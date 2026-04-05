@@ -67,11 +67,11 @@ private func loadEdgeCases(for hubModelName: String) throws -> [EdgeCase]? {
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 
 private func backendValue<T>(swift: T, rust: T) -> T {
-#if Rust
+    #if Rust
     rust
-#else
+    #else
     swift
-#endif
+    #endif
 }
 
 private func downloadModel(_ modelName: String) async throws -> URL {

@@ -6,7 +6,7 @@ import Foundation
 import Jinja
 import TokenizersCore
 
-fileprivate struct TokenizerTypeBox<Value>: @unchecked Sendable {
+private struct TokenizerTypeBox<Value>: @unchecked Sendable {
     let type: Value
 }
 
@@ -244,7 +244,8 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
     private func cleanUp(text: String) -> String {
         guard cleanUpTokenizationSpaces else { return text }
 
-        return text
+        return
+            text
             .replacingOccurrences(of: " .", with: ".")
             .replacingOccurrences(of: " ?", with: "?")
             .replacingOccurrences(of: " !", with: "!")
@@ -275,11 +276,12 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
     }
 
     package func tokenize(text: String) -> [String] {
-        let sections: [String] = if let regex = addedTokensRegex {
-            text.split(by: regex)
-        } else {
-            [text]
-        }
+        let sections: [String] =
+            if let regex = addedTokensRegex {
+                text.split(by: regex)
+            } else {
+                [text]
+            }
 
         return sections.enumerated().map { section, text in
             if addedTokens.contains(text) {
@@ -301,7 +303,8 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
         let tokenStrings: [String]
         if skipSpecialTokens {
             let specialTokenIDs = Set(specialTokens.values)
-            tokenStrings = tokenIds
+            tokenStrings =
+                tokenIds
                 .filter { !specialTokenIDs.contains($0) }
                 .compactMap { model.convertIdToToken($0) }
         } else {
@@ -314,9 +317,10 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
 
     package func renderChatTemplate(template: String, contextObject: [String: Any]) throws -> String {
         let compiledTemplate = try compiledTemplate(for: template)
-        let context = try Dictionary(uniqueKeysWithValues: contextObject.map { key, value in
-            (key, try Value(any: value))
-        })
+        let context = try Dictionary(
+            uniqueKeysWithValues: contextObject.map { key, value in
+                (key, try Value(any: value))
+            })
         return try compiledTemplate.render(context)
     }
 

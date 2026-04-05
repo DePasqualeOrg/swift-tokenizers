@@ -5,7 +5,7 @@
 import Foundation
 import TokenizersCore
 
-fileprivate struct ImmutableBox<Value>: @unchecked Sendable {
+private struct ImmutableBox<Value>: @unchecked Sendable {
     let value: Value
 }
 
