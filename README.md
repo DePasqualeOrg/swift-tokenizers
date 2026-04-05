@@ -153,13 +153,13 @@ let tokenizer = try await AutoTokenizer.from(directory: directory)
 
 The benchmarks use tests from MLX Swift LM and can be run from this package in Xcode.
 
-Set `RUN_BENCHMARKS=1` in the test scheme environment to enable them.
+Set `TOKENIZERS_ENABLE_BENCHMARKS=1` to include the benchmark target in the package graph, then set `RUN_BENCHMARKS=1` in the test scheme environment to run the benchmark suite.
 
 From the command line, use release builds for accurate numbers:
 
 ```bash
-RUN_BENCHMARKS=1 swift test -c release --filter Benchmarks
-RUN_BENCHMARKS=1 swift test -c release --traits Rust --filter Benchmarks
+TOKENIZERS_ENABLE_BENCHMARKS=1 RUN_BENCHMARKS=1 swift test -c release --filter Benchmarks
+TOKENIZERS_ENABLE_BENCHMARKS=1 RUN_BENCHMARKS=1 swift test -c release --traits Rust --filter Benchmarks
 ```
 
 These results were observed on an M3 MacBook Pro.

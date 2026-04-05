@@ -33,16 +33,18 @@ struct HubClientDownloader: Downloader, @unchecked Sendable {
         let revision = revision ?? "main"
 
         if !useLatest,
-            let cached = resolveCachedSnapshot(
-                repo: repoID,
+            let cached = try? await upstream.downloadSnapshot(
+                of: repoID,
                 revision: revision,
-                matching: patterns
+                matching: patterns,
+                localFilesOnly: true,
+                progressHandler: progressHandler
             )
         {
             return cached
         }
 
-        return try await downloadSnapshot(
+        return try await upstream.downloadSnapshot(
             of: repoID,
             revision: revision,
             matching: patterns,
