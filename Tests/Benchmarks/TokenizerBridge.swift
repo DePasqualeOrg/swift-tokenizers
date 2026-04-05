@@ -2,6 +2,19 @@ import Foundation
 import MLXLMCommon
 import Tokenizers
 
+struct BenchmarkTokenizerBackend {
+    let label: String
+    let loader: any TokenizerLoader
+}
+
+func activeBenchmarkTokenizerBackend() -> BenchmarkTokenizerBackend {
+#if Rust
+    BenchmarkTokenizerBackend(label: "rust-trait build", loader: TokenizersLoader())
+#else
+    BenchmarkTokenizerBackend(label: "swift build", loader: TokenizersLoader())
+#endif
+}
+
 struct TokenizerBridge: MLXLMCommon.Tokenizer {
     private let upstream: any Tokenizers.Tokenizer
 

@@ -1,3 +1,4 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 /// Implements a TokenLattice to implement the Viterbi algorithm
@@ -33,7 +34,6 @@ struct TokenLattice {
         endNodes[0].append(bos)
     }
 }
-
 extension TokenLattice {
     /// Insert a new token into the node lattice.
     ///
@@ -144,3 +144,4 @@ extension TokenLatticeNode: CustomStringConvertible {
         "TokenLatticeNode(tokenId: \(tokenId), startOffset: \(startOffset), length: \(length), score: \(score), prev: \(prev != nil), backtraceScore: \(backtraceScore)"
     }
 }
+#endif

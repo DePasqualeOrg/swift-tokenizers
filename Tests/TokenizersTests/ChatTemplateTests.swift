@@ -18,6 +18,17 @@ private let tokenizerAndChatTemplateFiles = [
     "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", "chat_template.json",
 ]
 
+private typealias TemplateMessage = Tokenizers.Message
+private typealias TemplateToolSpec = Tokenizers.ToolSpec
+
+private func backendValue<T>(swift: T, rust: T) -> T {
+#if Rust
+    rust
+#else
+    swift
+#endif
+}
+
 private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
     let modelDirectory = try await hubClient.downloadSnapshot(
         of: model,
@@ -58,9 +69,15 @@ struct ChatTemplateTests {
     func templateFromConfig() async throws {
         let tokenizer = try await Self.sharedPhiTokenizer()
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
-        let encodedTarget = [32010, 4002, 29581, 278, 14156, 8720, 4086, 29889, 32007, 32001]
+        let encodedTarget = backendValue(
+            swift: [32010, 4002, 29581, 278, 14156, 8720, 4086, 29889, 32007, 32001],
+            rust: [32010, 20355, 915, 278, 14156, 8720, 4086, 29889, 32007, 32001]
+        )
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = "<|user|>Describe the Swift programming language.<|end|><|assistant|>"
+        let decodedTarget = backendValue(
+            swift: "<|user|>Describe the Swift programming language.<|end|><|assistant|>",
+            rust: "<|user|> Describe the Swift programming language.<|end|><|assistant|>"
+        )
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }
@@ -102,12 +119,21 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: messages, chatTemplate: .literal(mistral7BDefaultTemplate)
         )
-        let encodedTarget = [
-            1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914, 25580,
-            29962,
-        ]
+        let encodedTarget = backendValue(
+            swift: [
+                1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914,
+                25580, 29962,
+            ],
+            rust: [
+                1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
+                29914, 25580, 29962,
+            ]
+        )
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = "<s> [INST] Describe the Swift programming language. [/INST]"
+        let decodedTarget = backendValue(
+            swift: "<s> [INST] Describe the Swift programming language. [/INST]",
+            rust: "<s>  [INST] Describe the Swift programming language. [/INST]"
+        )
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }
@@ -121,12 +147,21 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: messages, chatTemplate: mistral7BDefaultTemplate
         )
-        let encodedTarget = [
-            1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914, 25580,
-            29962,
-        ]
+        let encodedTarget = backendValue(
+            swift: [
+                1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914,
+                25580, 29962,
+            ],
+            rust: [
+                1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
+                29914, 25580, 29962,
+            ]
+        )
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = "<s> [INST] Describe the Swift programming language. [/INST]"
+        let decodedTarget = backendValue(
+            swift: "<s> [INST] Describe the Swift programming language. [/INST]",
+            rust: "<s>  [INST] Describe the Swift programming language. [/INST]"
+        )
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }
@@ -200,10 +235,13 @@ struct ChatTemplateTests {
             messages: messages, chatTemplate: whitespaceSensitiveTemplate
         )
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let expected = """
-            Describe the Swift programming language.
-            assistant
-            """
+        let expected = backendValue(
+            swift: """
+                Describe the Swift programming language.
+                assistant
+                """,
+            rust: "Describe the Swift programming language.\nassistant\n"
+        )
         #expect(decoded == expected)
         #expect(!decoded.hasPrefix("\n"))
         #expect(!decoded.contains("\n\n"))
@@ -214,33 +252,37 @@ struct ChatTemplateTests {
         let tokenizer = try await makeTokenizer(model: "mlx-community/Qwen2.5-7B-Instruct-4bit")
         #expect(tokenizer.hasChatTemplate)
 
-        let weatherQueryMessages: [[String: String]] = [
+        let weatherQueryMessages: [TemplateMessage] = [
             [
                 "role": "user",
                 "content": "What is the weather in Paris today?",
             ]
         ]
 
-        let getCurrentWeatherToolSpec: [String: Any] = [
-            "type": "function",
-            "function": [
-                "name": "get_current_weather",
-                "description": "Get the current weather in a given location",
-                "parameters": [
-                    "type": "object",
-                    "properties": [
-                        "location": [
-                            "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        ],
-                        "unit": [
-                            "type": "string",
-                            "enum": ["celsius", "fahrenheit"],
-                        ],
-                    ],
-                    "required": ["location"],
-                ],
+        let locationParameter: TemplateToolSpec = [
+            "type": "string",
+            "description": "The city and state, e.g. San Francisco, CA",
+        ]
+        let unitParameter: TemplateToolSpec = [
+            "type": "string",
+            "enum": ["celsius", "fahrenheit"],
+        ]
+        let getCurrentWeatherParameters: TemplateToolSpec = [
+            "type": "object",
+            "properties": [
+                "location": locationParameter,
+                "unit": unitParameter,
             ],
+            "required": ["location"],
+        ]
+        let getCurrentWeatherFunction: TemplateToolSpec = [
+            "name": "get_current_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": getCurrentWeatherParameters,
+        ]
+        let getCurrentWeatherToolSpec: TemplateToolSpec = [
+            "type": "function",
+            "function": getCurrentWeatherFunction,
         ]
 
         let encoded = try tokenizer.applyChatTemplate(
@@ -271,7 +313,7 @@ struct ChatTemplateTests {
         {
             let toolsSection = String(decoded[startRange.upperBound..<endRange.lowerBound])
             if let toolsDict = try? JSONSerialization.jsonObject(
-                with: toolsSection.data(using: .utf8)!) as? [String: Any]
+                with: toolsSection.data(using: String.Encoding.utf8)!) as? [String: Any]
             {
                 assertDictsAreEqual(toolsDict, getCurrentWeatherToolSpec)
             } else {
@@ -312,8 +354,8 @@ struct ChatTemplateTests {
             "Prompt should start with expected system message"
         )
         #expect(
-            decoded.trimmingCharacters(in: .newlines).hasSuffix(
-                expectedPromptEnd.trimmingCharacters(in: .newlines)
+            decoded.trimmingCharacters(in: CharacterSet.newlines).hasSuffix(
+                expectedPromptEnd.trimmingCharacters(in: CharacterSet.newlines)
             ),
             "Prompt should end with expected format"
         )
@@ -322,22 +364,21 @@ struct ChatTemplateTests {
     /// Test for vision models with a vision chat template in chat_template.json
     @Test("Chat template from chat template JSON")
     func chatTemplateFromChatTemplateJson() async throws {
-        let visionMessages =
+        let visionMessages: [TemplateMessage] = [
             [
-                [
-                    "role": "user",
-                    "content": [
-                        [
-                            "type": "text",
-                            "text": "What's in this image?",
-                        ] as [String: String],
-                        [
-                            "type": "image",
-                            "image_url": "example.jpg",
-                        ] as [String: String],
-                    ] as [[String: String]],
-                ] as [String: Any]
-            ] as [[String: Any]]
+                "role": "user",
+                "content": [
+                    [
+                        "type": "text",
+                        "text": "What's in this image?",
+                    ] as TemplateMessage,
+                    [
+                        "type": "image",
+                        "image_url": "example.jpg",
+                    ] as TemplateMessage,
+                ],
+            ]
+        ]
         // Qwen 2 VL does not have a chat_template.json file. The chat template is in tokenizer_config.json.
         let qwen2VLTokenizer = try await makeTokenizer(
             model: "mlx-community/Qwen2-VL-7B-Instruct-4bit",

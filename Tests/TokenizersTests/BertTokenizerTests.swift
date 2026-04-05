@@ -1,9 +1,11 @@
 // Copyright © Hugging Face SAS
 
+#if TOKENIZERS_SWIFT_BACKEND
 import Foundation
 import Testing
 
 @testable import Tokenizers
+@testable import TokenizersSwiftBackend
 
 /// Stanford Question Answering Dataset (SQuAD)
 private enum Squad {
@@ -245,3 +247,4 @@ struct BertTokenizerTests {
         }
     }
 }
+#endif

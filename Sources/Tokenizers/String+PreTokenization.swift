@@ -1,6 +1,8 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
+import TokenizersCore
 
 enum StringSplitPattern {
     case regexp(regexp: String)
@@ -25,7 +27,6 @@ enum StringSplitPattern {
         return nil
     }
 }
-
 enum SplitDelimiterBehavior {
     case removed
     case isolated
@@ -156,3 +157,4 @@ extension String {
         }
     }
 }
+#endif

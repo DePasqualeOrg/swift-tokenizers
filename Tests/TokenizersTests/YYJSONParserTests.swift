@@ -1,3 +1,4 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
@@ -5,6 +6,7 @@ import Foundation
 import Testing
 
 @testable import Tokenizers
+@testable import TokenizersSwiftBackend
 
 @Suite
 struct YYJSONParserTests {
@@ -332,3 +334,4 @@ struct YYJSONParserComparisonTests {
         #expect(foundationConfig["normal"] == yyjsonConfig["normal"])
     }
 }
+#endif

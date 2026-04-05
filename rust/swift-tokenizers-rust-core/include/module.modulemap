@@ -1,0 +1,4 @@
+module TokenizersRustCore {
+    header "TokenizersRustCore.h"
+    export *
+}

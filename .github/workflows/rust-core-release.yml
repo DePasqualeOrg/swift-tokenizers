@@ -1,0 +1,36 @@
+name: Rust Core Release
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: Release version used in the artifact filename
+                required: true
+                type: string
+
+permissions:
+    contents: write
+
+jobs:
+    build-rust-core:
+        name: Build Rust Core Artifact
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+            - name: Package release artifact
+              run: bash scripts/package-rust-core-release.sh "${{ inputs.version }}"
+
+            - name: Upload workflow artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: TokenizersRustCore-${{ inputs.version }}
+                  path: |
+                      Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip
+                      Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip.checksum
+

@@ -1,9 +1,11 @@
 // Copyright © Hugging Face SAS
 
+#if TOKENIZERS_SWIFT_BACKEND
 import Foundation
 import Testing
 
 @testable import Tokenizers
+@testable import TokenizersSwiftBackend
 
 @Suite("Normalizer Tests")
 struct NormalizerTests {
@@ -296,3 +298,4 @@ struct NormalizerTests {
         }
     }
 }
+#endif

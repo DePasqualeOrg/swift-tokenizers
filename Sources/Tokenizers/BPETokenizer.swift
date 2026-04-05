@@ -1,7 +1,13 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
 import Foundation
+import TokenizersCore
+
+fileprivate struct ImmutableBox<Value>: @unchecked Sendable {
+    let value: Value
+}
 
 /// A Byte-Pair Encoding (BPE) tokenizer implementation.
 ///
@@ -31,6 +37,12 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     private let stringToId: [String: Int]?
 
     /// The total number of tokens in the vocabulary.
+    ///
+    /// Swift computes this eagerly because `tokensToIds` is already materialized during model
+    /// construction. The Rust backend intentionally differs: it keeps vocab count off the load
+    /// path and resolves it lazily, matching the direction used by Python fast tokenizers in
+    /// `transformers/tokenization_utils_tokenizers.py`. If we revisit Swift load-time costs later,
+    /// this eager count is one place to reconsider.
     var vocabCount: Int { tokensToIds.count }
 
     /// The beginning-of-sequence token string, if defined.
@@ -96,6 +108,13 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         return tokensToIds
     }
 
+    fileprivate static func buildTokensToIdsBox(
+        rawVocab: ImmutableBox<NSDictionary>,
+        addedTokens: [String: Int]
+    ) -> ImmutableBox<[NSString: Int]> {
+        ImmutableBox(value: buildTokensToIds(rawVocab: rawVocab.value, addedTokens: addedTokens))
+    }
+
     /// Builds bpeRanks dictionary using packed token IDs.
     static func buildBpeRanks(
         merges: ContiguousArray<(NSString, NSString)>,
@@ -112,11 +131,24 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         return bpeRanks
     }
 
+    fileprivate static func buildBpeRanksBox(
+        merges: ImmutableBox<ContiguousArray<(NSString, NSString)>>,
+        tokensToIds: ImmutableBox<[NSString: Int]>
+    ) -> ImmutableBox<[UInt64: Int]> {
+        ImmutableBox(value: buildBpeRanks(merges: merges.value, tokensToIds: tokensToIds.value))
+    }
+
     /// Builds idsToTokens dictionary (inverse of tokensToIds).
     static func buildIdsToTokens(from tokensToIds: [NSString: Int]) -> [Int: NSString] {
         tokensToIds.reduce(into: [Int: NSString]()) { result, element in
             result[element.value] = element.key
         }
+    }
+
+    fileprivate static func buildIdsToTokensBox(
+        from tokensToIds: ImmutableBox<[NSString: Int]>
+    ) -> ImmutableBox<[Int: NSString]> {
+        ImmutableBox(value: buildIdsToTokens(from: tokensToIds.value))
     }
 
     /// Builds a String-keyed fallback dict only when Unicode normalization causes
@@ -132,6 +164,12 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             return stringToId
         }
         return nil
+    }
+
+    fileprivate static func buildStringToIdIfNeededBox(
+        from tokensToIds: ImmutableBox<[NSString: Int]>
+    ) -> ImmutableBox<[String: Int]?> {
+        ImmutableBox(value: buildStringToIdIfNeeded(from: tokensToIds.value))
     }
 
     /// Parse merges from raw JSON array, supporting both formats:
@@ -161,6 +199,12 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             }
         }
         return result
+    }
+
+    fileprivate static func mergesFromRawJSONBox(
+        _ rawMerges: ImmutableBox<[Any]>
+    ) -> ImmutableBox<ContiguousArray<(NSString, NSString)>> {
+        ImmutableBox(value: mergesFromRawJSON(rawMerges.value))
     }
 
     /// Parse merges from Config, supporting both formats:
@@ -294,27 +338,30 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         rawMerges: [Any],
         addedTokens: [String: Int]
     ) async -> BPETokenizer {
+        let rawVocab = ImmutableBox(value: rawVocab)
+        let rawMerges = ImmutableBox(value: rawMerges)
+
         // Phase 1: Build tokensToIds and parse merges in parallel (independent)
-        async let tokensToIdsTask = buildTokensToIds(rawVocab: rawVocab, addedTokens: addedTokens)
-        async let mergesTask = mergesFromRawJSON(rawMerges)
+        async let tokensToIdsTask = buildTokensToIdsBox(rawVocab: rawVocab, addedTokens: addedTokens)
+        async let mergesTask = mergesFromRawJSONBox(rawMerges)
 
         let tokensToIds = await tokensToIdsTask
         let merges = await mergesTask
 
         // Phase 2: Build remaining dicts in parallel (all depend on tokensToIds)
-        async let bpeRanksTask = buildBpeRanks(merges: merges, tokensToIds: tokensToIds)
-        async let idsToTokensTask = buildIdsToTokens(from: tokensToIds)
-        async let stringToIdTask = buildStringToIdIfNeeded(from: tokensToIds)
+        async let bpeRanksTask = buildBpeRanksBox(merges: merges, tokensToIds: tokensToIds)
+        async let idsToTokensTask = buildIdsToTokensBox(from: tokensToIds)
+        async let stringToIdTask = buildStringToIdIfNeededBox(from: tokensToIds)
 
         let bpeRanks = await bpeRanksTask
         let idsToTokens = await idsToTokensTask
         let stringToId = await stringToIdTask
 
         return BPETokenizer(
-            tokensToIds: tokensToIds,
-            bpeRanks: bpeRanks,
-            idsToTokens: idsToTokens,
-            stringToId: stringToId,
+            tokensToIds: tokensToIds.value,
+            bpeRanks: bpeRanks.value,
+            idsToTokens: idsToTokens.value,
+            stringToId: stringToId.value,
             tokenizerConfig: tokenizerConfig
         )
     }
@@ -422,3 +469,4 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         return tokens
     }
 }
+#endif

@@ -1,6 +1,8 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
+import TokenizersCore
 
 /// A protocol for text normalization operations applied before tokenization.
 ///
@@ -20,7 +22,6 @@ public protocol Normalizer {
     /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
     init(config: Config) throws
 }
-
 extension Normalizer {
     func callAsFunction(text: String) -> String {
         normalize(text: text)
@@ -360,3 +361,4 @@ extension StringReplacePattern {
         return nil
     }
 }
+#endif

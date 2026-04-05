@@ -1,8 +1,9 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
 
-struct Trie<T: Hashable> {
+struct Trie<T: Hashable>: @unchecked Sendable {
     typealias Node = TrieNode<T>
 
     var root: Node
@@ -70,7 +71,7 @@ extension Trie {
 }
 
 // TODO: maybe store the scores here if it's helpful?
-class TrieNode<T: Hashable> {
+class TrieNode<T: Hashable>: @unchecked Sendable {
     var isLeaf: Bool = false
     var children: [T: TrieNode] = [:]
 }
@@ -93,3 +94,4 @@ struct LeavesWithCommonPrefixIterator<T: Hashable>: Sequence, IteratorProtocol {
         }
     }
 }
+#endif

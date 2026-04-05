@@ -1,7 +1,6 @@
 // Copyright © Hugging Face SAS
 
 import Foundation
-import Jinja
 
 // MARK: - Configuration files with dynamic lookup
 
@@ -172,7 +171,7 @@ public struct Config: Hashable, Sendable,
         }
     }
 
-    init() {
+    package init() {
         self.value = .null
     }
 
@@ -438,31 +437,6 @@ public struct Config: Hashable, Sendable,
 
     public func get(or: [BinaryDistinctString: Config]) -> [BinaryDistinctString: Config] {
         self.dictionary(or: or)
-    }
-
-    public func jinjaValue() -> Jinja.Value {
-        switch self.value {
-        case let .array(val):
-            return .array(val.map { $0.jinjaValue() })
-        case let .dictionary(val):
-            var result: [String: Jinja.Value] = [:]
-            for (key, config) in val {
-                result[key.string] = config.jinjaValue()
-            }
-            return .object(.init(uniqueKeysWithValues: result))
-        case let .boolean(val):
-            return .boolean(val)
-        case let .floating(val):
-            return .double(Double(String(val)) ?? Double(val))
-        case let .integer(val):
-            return .int(val)
-        case let .string(val):
-            return .string(val.string)
-        case let .token(val):
-            return [String(val.0): .string(val.1.string)]
-        case .null:
-            return .null
-        }
     }
 
     public func dictionary() -> [BinaryDistinctString: Config]? {
@@ -843,10 +817,33 @@ extension Config {
     /// Extracts a token string from a Config value that may be either a plain string
     /// or an AddedToken dictionary with a "content" key.
     // TODO: support lstrip, rstrip, normalized, etc. from AddedToken
-    var tokenString: String? {
+    package var tokenString: String? {
         if let stringValue = string() {
             return stringValue
         }
         return self.content.string()
+    }
+
+    func foundationObject() -> Any {
+        switch value {
+        case .null:
+            return NSNull()
+        case let .string(value):
+            return value.string
+        case let .integer(value):
+            return value
+        case let .boolean(value):
+            return value
+        case let .floating(value):
+            return Double(value)
+        case let .dictionary(values):
+            return Dictionary(uniqueKeysWithValues: values.map { key, value in
+                (key.string, value.foundationObject())
+            })
+        case let .array(values):
+            return values.map { $0.foundationObject() }
+        case let .token(value):
+            return [Int(value.0), value.1.string]
+        }
     }
 }

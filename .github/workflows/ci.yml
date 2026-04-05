@@ -23,6 +23,23 @@ jobs:
             - name: Run tests
               run: swift test
 
+    test-rust:
+        name: Test Rust Backend (macOS)
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+            - name: Build Rust XCFramework
+              run: bash scripts/build-rust-core-xcframework.sh
+
+            - name: Run Rust trait tests
+              run: swift test --traits Rust
+
     build-linux:
         name: Build (Linux)
         runs-on: ubuntu-latest

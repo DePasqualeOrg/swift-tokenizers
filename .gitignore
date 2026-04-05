@@ -1,4 +1,4 @@
-.DS_Store
+**/.DS_Store
 **/.build
 /.swiftpm
 Package.resolved
@@ -12,3 +12,9 @@ DerivedData/
 .idea
 .index-build
 *.out
+
+# Generated Rust backend artifacts
+/Binaries/
+/Artifacts/
+/rust/**/target/
+/rust/**/Cargo.lock

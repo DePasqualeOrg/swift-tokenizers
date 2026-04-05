@@ -1,9 +1,11 @@
 // Copyright © Hugging Face SAS
 
+#if TOKENIZERS_SWIFT_BACKEND
 import Foundation
 import Testing
 
 @testable import Tokenizers
+@testable import TokenizersSwiftBackend
 
 @Suite("Trie data structure functionality")
 struct TrieTests {
@@ -61,3 +63,4 @@ struct TrieTests {
         #expect(expected.count == 0)
     }
 }
+#endif

@@ -1,9 +1,11 @@
 // Copyright © Hugging Face SAS
 
+#if TOKENIZERS_SWIFT_BACKEND
 import Foundation
 import Testing
 
 @testable import Tokenizers
+@testable import TokenizersSwiftBackend
 
 @Suite("Post-processor functionality tests")
 struct PostProcessorTests {
@@ -159,3 +161,4 @@ struct PostProcessorTests {
         }
     }
 }
+#endif

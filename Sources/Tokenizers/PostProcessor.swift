@@ -1,6 +1,8 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
+import TokenizersCore
 
 /// A protocol for post-processing operations applied after tokenization.
 ///
@@ -23,7 +25,6 @@ public protocol PostProcessor {
     /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
     init(config: Config) throws
 }
-
 extension PostProcessor {
     /// Convenience with default parameter values for the protocol requirement.
     func postProcess(tokens: [String], tokensPair: [String]? = nil, addSpecialTokens: Bool = true) -> [String] {
@@ -215,3 +216,4 @@ class SequenceProcessing: PostProcessor {
         return currentTokens
     }
 }
+#endif

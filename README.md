@@ -1,12 +1,65 @@
 Swift Tokenizers is a streamlined and optimized fork of Swift Transformers that focuses solely on tokenizer functionality. It has no dependency on the Hugging Face Hub: tokenizers are simply loaded from a directory, and downloading is handled separately.
 
+The package supports two backends behind the same Swift API:
+
+- `Swift` is the default backend. It is pure Swift and requires no Rust artifact.
+- `Rust` is an opt-in backend that uses a prebuilt Rust core for faster tokenization and decoding on supported Apple platforms.
+
 Refer to the [Benchmarks](#benchmarks) section to compare the performance of Swift Tokenizers and Swift Transformers.
+
+## Package setup
+
+Swift Tokenizers uses Swift package traits and requires Swift 6.1 or newer.
+
+### Default pure Swift backend
+
+If you add the package without specifying traits, the default `Swift` trait is enabled:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.1.0")
+]
+```
+
+### Opt in to the Rust backend
+
+To build with the Rust backend instead of the default Swift backend, enable only the `Rust` trait:
+
+```swift
+dependencies: [
+    .package(
+        url: "https://github.com/DePasqualeOrg/swift-tokenizers.git",
+        from: "0.1.0",
+        traits: ["Rust"]
+    )
+]
+```
+
+The package traits are intentionally mutually exclusive:
+
+- default dependency declaration: enables the `Swift` backend
+- `traits: ["Rust"]`: enables the `Rust` backend only
+
+Do not combine `.defaults` and `"Rust"` for this package.
+
+### Building the local Rust artifact
+
+The Rust backend currently expects the XCFramework to be present locally when building from a checkout of this repository:
+
+```bash
+bash scripts/build-rust-core-xcframework.sh
+```
+
+The repository also includes:
+
+- `scripts/package-rust-core-release.sh` to zip the XCFramework and compute the SwiftPM checksum
+- `.github/workflows/rust-core-release.yml` to build the release artifact in CI
 
 ## Examples
 
 ### Loading a tokenizer
 
-Load a tokenizer from a local directory containing `tokenizer.json` and `tokenizer_config.json`:
+Load a tokenizer from a local directory containing `tokenizer.json` and any relevant sidecar files such as `tokenizer_config.json`, `config.json`, and `chat_template.jinja`:
 
 ```swift
 import Tokenizers
@@ -73,6 +126,16 @@ Replace `swift-transformers` with `swift-tokenizers` in your `Package.swift`. Th
 .product(name: "Tokenizers", package: "swift-tokenizers"),
 ```
 
+If you want the Rust backend, enable the `Rust` trait on the package dependency:
+
+```swift
+.package(
+    url: "https://github.com/DePasqualeOrg/swift-tokenizers.git",
+    from: "...",
+    traits: ["Rust"]
+),
+```
+
 ### Loading tokenizers
 
 Download model files separately, then load from a local directory.
@@ -91,6 +154,13 @@ let tokenizer = try await AutoTokenizer.from(directory: directory)
 The benchmarks use tests from MLX Swift LM and can be run from this package in Xcode.
 
 Set `RUN_BENCHMARKS=1` in the test scheme environment to enable them.
+
+From the command line, use release builds for accurate numbers:
+
+```bash
+RUN_BENCHMARKS=1 swift test -c release --filter Benchmarks
+RUN_BENCHMARKS=1 swift test -c release --traits Rust --filter Benchmarks
+```
 
 These results were observed on an M3 MacBook Pro.
 

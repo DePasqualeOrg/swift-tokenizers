@@ -1,6 +1,8 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
+import TokenizersCore
 
 /// A protocol for decoding operations that convert tokens back to readable text.
 ///
@@ -20,7 +22,6 @@ public protocol Decoder {
     /// - Throws: `TokenizerError` if the configuration is invalid or missing required data
     init(config: Config) throws
 }
-
 extension Decoder {
     func callAsFunction(tokens: [String]) -> [String] {
         decode(tokens: tokens)
@@ -273,3 +274,4 @@ private extension String {
         return result
     }
 }
+#endif

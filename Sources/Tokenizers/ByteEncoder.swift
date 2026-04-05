@@ -1,3 +1,4 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 
 import Foundation
@@ -264,3 +265,4 @@ let byteEncoder: [UTF8.CodeUnit: String] = [
 let byteDecoder = byteEncoder.reduce(into: [String: UTF8.CodeUnit]()) { result, element in
     result[element.value] = element.key
 }
+#endif

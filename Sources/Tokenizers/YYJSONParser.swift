@@ -1,7 +1,9 @@
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
+#if TOKENIZERS_SWIFT_BACKEND
 import Foundation
+import TokenizersCore
 import yyjson
 
 /// A high-performance JSON parser using yyjson.
@@ -263,3 +265,4 @@ enum YYJSONParser {
         return Config(result)
     }
 }
+#endif

@@ -4,58 +4,89 @@ import Testing
 import Foundation
 
 private let benchmarksEnabled = ProcessInfo.processInfo.environment["RUN_BENCHMARKS"] == "1"
+private let modelBenchmarksEnabled = ProcessInfo.processInfo.environment["RUN_MODEL_BENCHMARKS"] == "1"
 
 @Suite(.serialized, .enabled(if: benchmarksEnabled))
 struct Benchmarks {
+    @Test func loadSidecars() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
+        let stats = try await benchmarkSidecarLoading(
+            from: HubClient.default
+        )
+        stats.printSummary(label: "Sidecar load (\(backend.label))")
+    }
+
+    @Test func loadTokenizerCore() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
+        let stats = try await benchmarkTokenizerCoreLoading(
+            from: HubClient.default
+        )
+        stats.printSummary(label: "Tokenizer core load (\(backend.label))")
+    }
+
     @Test func loadTokenizer() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let stats = try await benchmarkTokenizerLoading(
             from: HubClient.default,
-            using: TokenizersLoader()
+            using: backend.loader
         )
-        stats.printSummary(label: "Tokenizer load (swift-tokenizers)")
+        stats.printSummary(label: "Tokenizer load (\(backend.label))")
     }
 
     @Test func tokenizeText() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let sampleText = try await loadTokenizationBenchmarkText()
         let stats = try await benchmarkTokenization(
             from: HubClient.default,
-            using: TokenizersLoader(),
+            using: backend.loader,
             text: sampleText
         )
-        stats.printSummary(label: "Tokenization (swift-tokenizers)")
+        stats.printSummary(label: "Tokenization (\(backend.label))")
     }
 
     @Test func decodeText() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let sampleText = try await loadDecodingBenchmarkText()
         let stats = try await benchmarkDecoding(
             from: HubClient.default,
-            using: TokenizersLoader(),
+            using: backend.loader,
             text: sampleText
         )
-        stats.printSummary(label: "Decoding (swift-tokenizers)")
+        stats.printSummary(label: "Decoding (\(backend.label))")
     }
 
-    @Test func loadLLM() async throws {
+    @Test func renderChatTemplate() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
+        let stats = try await benchmarkChatTemplateRendering(
+            from: HubClient.default
+        )
+        stats.printSummary(label: "Chat template render (\(backend.label))")
+    }
+
+    @Test(.enabled(if: modelBenchmarksEnabled)) func loadLLM() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let stats = try await benchmarkLLMLoading(
             from: HubClient.default,
-            using: TokenizersLoader()
+            using: backend.loader
         )
-        stats.printSummary(label: "LLM load (swift-tokenizers)")
+        stats.printSummary(label: "LLM load (\(backend.label))")
     }
 
-    @Test func loadVLM() async throws {
+    @Test(.enabled(if: modelBenchmarksEnabled)) func loadVLM() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let stats = try await benchmarkVLMLoading(
             from: HubClient.default,
-            using: TokenizersLoader()
+            using: backend.loader
         )
-        stats.printSummary(label: "VLM load (swift-tokenizers)")
+        stats.printSummary(label: "VLM load (\(backend.label))")
     }
 
-    @Test func loadEmbedding() async throws {
+    @Test(.enabled(if: modelBenchmarksEnabled)) func loadEmbedding() async throws {
+        let backend = activeBenchmarkTokenizerBackend()
         let stats = try await benchmarkEmbeddingLoading(
             from: HubClient.default,
-            using: TokenizersLoader()
+            using: backend.loader
         )
-        stats.printSummary(label: "Embedding load (swift-tokenizers)")
+        stats.printSummary(label: "Embedding load (\(backend.label))")
     }
 }

@@ -1,7 +1,13 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
 import Foundation
+import TokenizersCore
+
+fileprivate struct ImmutableBox<Value>: @unchecked Sendable {
+    let value: Value
+}
 
 /// A Unigram tokenizer implementation based on the SentencePiece algorithm.
 ///
@@ -10,7 +16,7 @@ import Foundation
 /// This is commonly used in models like T5 and XLM-RoBERTa.
 class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// A token with its associated score in the Unigram model.
-    struct SentencePieceToken {
+    struct SentencePieceToken: Sendable {
         var token: String
         var score: Float
     }
@@ -86,6 +92,12 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         Dictionary(
             uniqueKeysWithValues: vocab.map { $0.token as NSString }.enumerated().map { ($1, $0) }
         )
+    }
+
+    fileprivate static func buildTokensToIdsBox(
+        from vocab: [SentencePieceToken]
+    ) -> ImmutableBox<[NSString: Int]> {
+        ImmutableBox(value: buildTokensToIds(from: vocab))
     }
 
     /// Builds a character trie from the vocabulary for prefix matching.
@@ -239,7 +251,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         let vocabArray = buildVocab(from: rawVocab)
 
         // Phase 2: Build independent data structures in parallel
-        async let tokensToIdsTask = buildTokensToIds(from: vocabArray)
+        async let tokensToIdsTask = buildTokensToIdsBox(from: vocabArray)
         async let trieTask = buildTrie(from: vocabArray)
         async let minScoreTask = computeMinScore(from: vocabArray)
 
@@ -249,7 +261,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
 
         return UnigramTokenizer(
             vocab: vocabArray,
-            tokensToIds: tokensToIds,
+            tokensToIds: tokensToIds.value,
             trie: trie,
             minScore: minScore,
             unknownTokenId: unknownTokenId,
@@ -309,3 +321,4 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         return lattice.tokens
     }
 }
+#endif

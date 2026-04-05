@@ -1,7 +1,9 @@
+#if TOKENIZERS_SWIFT_BACKEND
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
 import Foundation
+import TokenizersCore
 
 /// A BERT-style tokenizer implementing WordPiece tokenization.
 ///
@@ -197,7 +199,6 @@ public final class BertTokenizer: Sendable {
         }.joined()
     }
 }
-
 extension BertTokenizer: PreTrainedTokenizerModel {
     /// The unknown token string used for out-of-vocabulary words.
     public var unknownToken: String? { wordpieceTokenizer.unkToken }
@@ -346,3 +347,4 @@ final class WordpieceTokenizer: Sendable {
         return outputTokens
     }
 }
+#endif
