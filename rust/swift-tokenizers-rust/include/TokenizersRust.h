@@ -1,5 +1,5 @@
-#ifndef TOKENIZERS_RUST_CORE_H
-#define TOKENIZERS_RUST_CORE_H
+#ifndef TOKENIZERS_RUST_H
+#define TOKENIZERS_RUST_H
 
 #include <stdbool.h>
 #include <stddef.h>

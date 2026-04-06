@@ -3,7 +3,7 @@ Swift Tokenizers is a streamlined and optimized fork of Swift Transformers that 
 The package supports two backends behind the same Swift API:
 
 - `Swift` is the default backend. It is pure Swift and requires no Rust artifact.
-- `Rust` is an opt-in backend that uses a prebuilt Rust core for faster tokenization and decoding on supported Apple platforms.
+- `Rust` is an opt-in backend that uses a prebuilt Rust artifact for faster tokenization and decoding on supported Apple platforms.
 
 Refer to the [Benchmarks](#benchmarks) section to compare the performance of Swift Tokenizers and Swift Transformers.
 
@@ -47,13 +47,13 @@ Do not combine `.defaults` and `"Rust"` for this package.
 The Rust backend currently expects the XCFramework to be present locally when building from a checkout of this repository:
 
 ```bash
-bash scripts/build-rust-core-xcframework.sh
+bash scripts/build-rust-xcframework.sh
 ```
 
 The repository also includes:
 
-- `scripts/package-rust-core-release.sh` to zip the XCFramework and compute the SwiftPM checksum
-- `.github/workflows/rust-core-release.yml` to build the release artifact in CI and publish it as a GitHub prerelease asset
+- `scripts/package-rust-release.sh` to zip the XCFramework and compute the SwiftPM checksum
+- `.github/workflows/rust-release.yml` to build the release artifact in CI and publish it as a GitHub prerelease asset
 
 ## Examples
 

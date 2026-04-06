@@ -1,12 +1,12 @@
 [package]
-name = "tokenizers_rust_core"
+name = "tokenizers_rust"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 publish = false
 
 [lib]
-name = "tokenizers_rust_core"
+name = "tokenizers_rust"
 crate-type = ["staticlib"]
 
 [dependencies]

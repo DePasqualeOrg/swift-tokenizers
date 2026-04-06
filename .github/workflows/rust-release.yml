@@ -12,8 +12,8 @@ permissions:
     contents: write
 
 jobs:
-    build-rust-core:
-        name: Build Rust Core Artifact
+    build-rust:
+        name: Build and Publish Rust XCFramework
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@v6
@@ -24,7 +24,7 @@ jobs:
                   targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
             - name: Package release artifact
-              run: bash scripts/package-rust-core-release.sh "${{ inputs.version }}"
+              run: bash scripts/package-rust-release.sh "${{ inputs.version }}"
 
             - name: Publish GitHub prerelease assets
               env:
@@ -34,11 +34,11 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  tag="rust-core-${VERSION}"
-                  title="Rust core artifact for ${VERSION}"
-                  archive="Artifacts/TokenizersRustCore-${VERSION}.xcframework.zip"
+                  tag="tokenizers-rust-${VERSION}"
+                  title="Tokenizers Rust XCFramework (${VERSION})"
+                  archive="Artifacts/TokenizersRust-${VERSION}.xcframework.zip"
                   checksum="${archive}.checksum"
-                  notes="Prebuilt Rust core XCFramework artifact for ${TARGET_REF}."
+                  notes="Prebuilt Tokenizers Rust XCFramework artifact for ${TARGET_REF}."
 
                   if gh release view "${tag}" >/dev/null 2>&1; then
                       gh release upload "${tag}" "${archive}" "${checksum}" --clobber
@@ -60,7 +60,7 @@ jobs:
             - name: Upload workflow artifact
               uses: actions/upload-artifact@v6
               with:
-                  name: TokenizersRustCore-${{ inputs.version }}
+                  name: TokenizersRust-${{ inputs.version }}
                   path: |
-                      Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip
-                      Artifacts/TokenizersRustCore-${{ inputs.version }}.xcframework.zip.checksum
+                      Artifacts/TokenizersRust-${{ inputs.version }}.xcframework.zip
+                      Artifacts/TokenizersRust-${{ inputs.version }}.xcframework.zip.checksum

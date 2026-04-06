@@ -42,7 +42,7 @@ func excludedTokenizerSources(keeping sources: [String]) -> [String] {
 }
 
 var packageDependencies: [Package.Dependency] = [
-    .package(path: "RustCorePackage"),
+    .package(path: "TokenizersRustBinary"),
     .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.0.0"),
     .package(url: "https://github.com/ibireme/yyjson.git", exact: "0.12.0"),
     .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.2.0"),
@@ -84,7 +84,7 @@ var packageTargets: [Target] = [
         name: "TokenizersRustBackend",
         dependencies: [
             "TokenizersCore",
-            .product(name: "TokenizersRustBinary", package: "RustCorePackage", condition: .when(traits: ["Rust"])),
+            .product(name: "TokenizersRust", package: "TokenizersRustBinary", condition: .when(traits: ["Rust"])),
         ],
         path: "Sources/Tokenizers",
         exclude: excludedTokenizerSources(keeping: tokenizerRustBackendSources),

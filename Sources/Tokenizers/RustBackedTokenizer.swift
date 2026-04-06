@@ -2,7 +2,7 @@ import Foundation
 import TokenizersCore
 
 #if Rust
-import TokenizersRustCore
+import TokenizersRust
 
 private struct RustTokenizerDescriptor: Decodable {
     let runtimeConfiguration: TokenizerRuntimeConfiguration
