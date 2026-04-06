@@ -4,7 +4,7 @@ on:
     workflow_dispatch:
         inputs:
             version:
-                description: Artifact label used in the filename and release tag suffix
+                description: Semantic artifact version, for example 0.2.2 or 0.2.2-rc.1
                 required: true
                 type: string
 
@@ -21,10 +21,33 @@ jobs:
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
+                  toolchain: 1.94.1
                   targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
             - name: Package release artifact
               run: bash scripts/package-rust-release.sh "${{ inputs.version }}"
+
+            - name: Validate local Rust artifact
+              env:
+                  TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: ../Binaries/TokenizersRust.xcframework
+              run: |
+                  set -euo pipefail
+
+                  swift package clean
+                  swift test --traits Rust
+
+            - name: Generate release notes
+              env:
+                  TARGET_REF: ${{ github.ref_name }}
+                  VERSION: ${{ inputs.version }}
+              run: |
+                  set -euo pipefail
+
+                  python3 scripts/rust-release-notes.py \
+                      --repo-root . \
+                      --target-ref "${TARGET_REF}" \
+                      --version "${VERSION}" \
+                      --output Artifacts/TokenizersRust-${VERSION}.release-notes.md
 
             - name: Publish GitHub prerelease assets
               env:
@@ -35,20 +58,31 @@ jobs:
                   set -euo pipefail
 
                   tag="tokenizers-rust-${VERSION}"
-                  title="Tokenizers Rust XCFramework (${VERSION})"
+                  title="Tokenizers Rust XCFramework ${VERSION}"
                   archive="Artifacts/TokenizersRust-${VERSION}.xcframework.zip"
                   checksum="${archive}.checksum"
-                  notes="Prebuilt Tokenizers Rust XCFramework artifact for ${TARGET_REF}."
+                  notes_file="Artifacts/TokenizersRust-${VERSION}.release-notes.md"
+                  prerelease_flag=()
+
+                  if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+                      echo "Version must be semantic, for example 0.2.2 or 0.2.2-rc.1." >&2
+                      exit 1
+                  fi
+
+                  if [[ "${VERSION}" == *-* ]]; then
+                      prerelease_flag+=(--prerelease)
+                  fi
 
                   if gh release view "${tag}" >/dev/null 2>&1; then
-                      gh release upload "${tag}" "${archive}" "${checksum}" --clobber
-                  else
-                      gh release create "${tag}" "${archive}" "${checksum}" \
-                          --target "${TARGET_REF}" \
-                          --title "${title}" \
-                          --notes "${notes}" \
-                          --prerelease
+                      echo "Release ${tag} already exists. Publish a new semantic version instead of mutating an existing artifact." >&2
+                      exit 1
                   fi
+
+                  gh release create "${tag}" "${archive}" "${checksum}" \
+                      --target "${TARGET_REF}" \
+                      --title "${title}" \
+                      --notes-file "${notes_file}" \
+                      "${prerelease_flag[@]}"
 
                   release_url="$(gh release view "${tag}" --json url --jq '.url')"
                   {

@@ -17,7 +17,7 @@ If you add the package without specifying traits, the default `Swift` trait is e
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.1.0")
+    .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.2.1")
 ]
 ```
 
@@ -29,7 +29,7 @@ To build with the Rust backend instead of the default Swift backend, enable only
 dependencies: [
     .package(
         url: "https://github.com/DePasqualeOrg/swift-tokenizers.git",
-        from: "0.1.0",
+        from: "0.2.1",
         traits: ["Rust"]
     )
 ]
@@ -44,7 +44,7 @@ Do not combine `.defaults` and `"Rust"` for this package.
 
 ### Building the local Rust artifact
 
-The Rust backend currently expects the XCFramework to be present locally when building from a checkout of this repository:
+Package consumers do not need to build the XCFramework locally. This is only needed when working on the Rust backend itself or publishing a new Rust artifact:
 
 ```bash
 bash scripts/build-rust-xcframework.sh
@@ -53,7 +53,12 @@ bash scripts/build-rust-xcframework.sh
 The repository also includes:
 
 - `scripts/package-rust-release.sh` to zip the XCFramework and compute the SwiftPM checksum
-- `.github/workflows/rust-release.yml` to build the release artifact in CI and publish it as a GitHub prerelease asset
+- `scripts/rust-release-notes.py` to generate release notes from the locked Rust dependency graph
+- `.github/workflows/rust-release.yml` to build, validate, and publish the release artifact in CI
+
+The Rust release flow pins the toolchain in `rust-toolchain.toml`, installs the required Apple targets with `rustup`, tracks `rust/swift-tokenizers-rust/Cargo.lock`, and builds with `cargo --locked`.
+
+When publishing a Rust artifact, use semantic versions aligned with the package release line, for example `0.2.2` or `0.2.2-rc.1`. Versions containing `-` are published as prereleases; plain `x.y.z` versions are published as final releases.
 
 ## Examples
 

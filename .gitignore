@@ -17,4 +17,3 @@ DerivedData/
 /Binaries/
 /Artifacts/
 /rust/**/target/
-/rust/**/Cargo.lock

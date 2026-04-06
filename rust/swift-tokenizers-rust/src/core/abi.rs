@@ -121,7 +121,7 @@ fn failure(out_error: *mut st_error_t, error: CoreError) -> bool {
     false
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_create_from_directory(
     directory_path: *const c_char,
     out_handle: *mut *mut st_tokenizer_handle,
@@ -161,7 +161,7 @@ pub extern "C" fn st_tokenizer_create_from_directory(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_load_tokenizer_runtime_configuration(
     directory_path: *const c_char,
     out_runtime_configuration_json: *mut st_owned_buffer_t,
@@ -195,7 +195,7 @@ pub extern "C" fn st_load_tokenizer_runtime_configuration(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_create_from_tokenizer_json(
     directory_path: *const c_char,
     runtime_configuration_json: *const c_char,
@@ -251,7 +251,7 @@ pub extern "C" fn st_tokenizer_create_from_tokenizer_json(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_destroy(handle: *mut st_tokenizer_handle) {
     if handle.is_null() {
         return;
@@ -262,7 +262,7 @@ pub extern "C" fn st_tokenizer_destroy(handle: *mut st_tokenizer_handle) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_tokenize_to_json(
     handle: *const st_tokenizer_handle,
     text: *const c_char,
@@ -300,7 +300,7 @@ pub extern "C" fn st_tokenizer_tokenize_to_json(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_encode(
     handle: *const st_tokenizer_handle,
     text: *const c_char,
@@ -329,7 +329,7 @@ pub extern "C" fn st_tokenizer_encode(
     success_no_value(out_error)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_decode(
     handle: *const st_tokenizer_handle,
     token_ids: *const i32,
@@ -367,7 +367,7 @@ pub extern "C" fn st_tokenizer_decode(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_convert_token_to_id(
     handle: *const st_tokenizer_handle,
     token: *const c_char,
@@ -399,7 +399,7 @@ pub extern "C" fn st_tokenizer_convert_token_to_id(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_convert_id_to_token(
     handle: *const st_tokenizer_handle,
     token_id: i32,
@@ -426,7 +426,7 @@ pub extern "C" fn st_tokenizer_convert_id_to_token(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_vocab_count(
     handle: *const st_tokenizer_handle,
     out_vocab_count: *mut usize,
@@ -451,7 +451,7 @@ pub extern "C" fn st_tokenizer_vocab_count(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_tokenizer_apply_chat_template(
     handle: *const st_tokenizer_handle,
     template: *const c_char,
@@ -498,7 +498,7 @@ pub extern "C" fn st_tokenizer_apply_chat_template(
     success_no_value(out_error)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_render_template(
     template: *const c_char,
     context_json: *const c_char,
@@ -536,7 +536,7 @@ pub extern "C" fn st_render_template(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_free_owned_buffer(buffer: st_owned_buffer_t) {
     if buffer.data.is_null() || buffer.len == 0 {
         return;
@@ -547,7 +547,7 @@ pub extern "C" fn st_free_owned_buffer(buffer: st_owned_buffer_t) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn st_free_int32_array(data: *mut i32, len: usize) {
     if data.is_null() || len == 0 {
         return;
