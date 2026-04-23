@@ -1,4 +1,4 @@
-Swift Tokenizers is a streamlined and optimized fork of Swift Transformers that focuses solely on tokenizer functionality. It has no dependency on the Hugging Face Hub: tokenizers are simply loaded from a directory, and downloading is handled separately.
+Swift Tokenizers is a high-performance tokenizer library aligned with Python Transformers v5 and Rust Tokenizers. Unlike Swift Transformers, it focuses solely on tokenizer functionality and has no dependency on the Hugging Face Hub. It offers significantly faster model loading and tokenization performance in Swift and further performance improvements when using the optional Rust backend.
 
 Refer to the [Benchmarks](#benchmarks) section to compare the performance of Swift Tokenizers and Swift Transformers.
 
@@ -111,7 +111,7 @@ Replace `swift-transformers` with `swift-tokenizers` in your `Package.swift`. Th
 .product(name: "Transformers", package: "swift-transformers"),
 
 // After
-.package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "..."),
+.package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "...", traits: ["Swift"]),
 // ...
 .product(name: "Tokenizers", package: "swift-tokenizers"),
 ```

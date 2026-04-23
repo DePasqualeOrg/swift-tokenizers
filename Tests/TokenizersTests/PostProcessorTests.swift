@@ -109,6 +109,89 @@ struct PostProcessorTests {
         }
     }
 
+    @Suite("TemplateProcessing expansion")
+    struct TemplateProcessingTests {
+        private static let llamaStyleConfig: Config = .init([
+            "type": "TemplateProcessing",
+            "single": [
+                ["SpecialToken": ["id": "<s>", "type_id": 0]],
+                ["Sequence": ["id": "A", "type_id": 0]],
+            ],
+            "pair": [
+                ["SpecialToken": ["id": "<s>", "type_id": 0]],
+                ["Sequence": ["id": "A", "type_id": 0]],
+                ["SpecialToken": ["id": "<s>", "type_id": 1]],
+                ["Sequence": ["id": "B", "type_id": 1]],
+            ],
+        ])
+
+        @Test("Single template prepends bos to sequence A")
+        func singleSequenceExpansion() throws {
+            let processor = try TemplateProcessing(config: Self.llamaStyleConfig)
+            let result = processor.postProcess(
+                tokens: ["Hello", ",", "world"],
+                tokensPair: nil,
+                addSpecialTokens: true
+            )
+            #expect(result == ["<s>", "Hello", ",", "world"])
+        }
+
+        @Test("Pair template expands sequence A and B with both bos tokens")
+        func pairSequenceExpansion() throws {
+            let processor = try TemplateProcessing(config: Self.llamaStyleConfig)
+            let result = processor.postProcess(
+                tokens: ["first"],
+                tokensPair: ["second"],
+                addSpecialTokens: true
+            )
+            #expect(result == ["<s>", "first", "<s>", "second"])
+        }
+
+        @Test("addSpecialTokens false suppresses SpecialToken entries but keeps Sequences")
+        func specialTokenSuppression() throws {
+            let processor = try TemplateProcessing(config: Self.llamaStyleConfig)
+            let single = processor.postProcess(
+                tokens: ["x", "y"],
+                tokensPair: nil,
+                addSpecialTokens: false
+            )
+            #expect(single == ["x", "y"])
+
+            let pair = processor.postProcess(
+                tokens: ["a"],
+                tokensPair: ["b"],
+                addSpecialTokens: false
+            )
+            #expect(pair == ["a", "b"])
+        }
+
+        @Test("BERT-style cls/sep substitution around both sequences")
+        func bertStyleSubstitution() throws {
+            let config = Config([
+                "type": "TemplateProcessing",
+                "single": [
+                    ["SpecialToken": ["id": "[CLS]", "type_id": 0]],
+                    ["Sequence": ["id": "A", "type_id": 0]],
+                    ["SpecialToken": ["id": "[SEP]", "type_id": 0]],
+                ],
+                "pair": [
+                    ["SpecialToken": ["id": "[CLS]", "type_id": 0]],
+                    ["Sequence": ["id": "A", "type_id": 0]],
+                    ["SpecialToken": ["id": "[SEP]", "type_id": 0]],
+                    ["Sequence": ["id": "B", "type_id": 1]],
+                    ["SpecialToken": ["id": "[SEP]", "type_id": 1]],
+                ],
+            ])
+            let processor = try TemplateProcessing(config: config)
+            let result = processor.postProcess(
+                tokens: ["Q"],
+                tokensPair: ["A"],
+                addSpecialTokens: true
+            )
+            #expect(result == ["[CLS]", "Q", "[SEP]", "A", "[SEP]"])
+        }
+    }
+
     @Suite("Post-processor error handling")
     struct PostProcessorErrorTests {
         @Test("Unsupported post-processor type throws unsupportedComponent")

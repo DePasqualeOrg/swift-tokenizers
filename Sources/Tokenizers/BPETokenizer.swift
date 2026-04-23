@@ -57,14 +57,25 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// The numeric ID of the end-of-sequence token, if defined.
     let eosTokenId: Int?
 
-    /// The unknown token string used for out-of-vocabulary words.
+    /// The BPE model's unknown token, resolved strictly from
+    /// `tokenizer.json.model.unk_token` to mirror Rust's `BPE::unk_token` field
+    /// (`tokenizers/src/models/bpe/model.rs`). Used both as the `TokenizingModel`
+    /// metadata field and for OOV emission during `tokenize`. The public,
+    /// user-facing unknown token (which may instead come from
+    /// `tokenizer_config.json.unk_token`) is composed at the tokenizer layer by
+    /// `PreTrainedTokenizer.unknownToken`, matching the sidecar resolution order.
     let unknownToken: String?
 
-    /// The numeric ID of the unknown token.
+    /// The numeric ID of the unknown token, looked up in the vocabulary.
     let unknownTokenId: Int?
 
     /// Whether consecutive unknown tokens should be fused together.
     let fuseUnknownTokens: Bool
+
+    /// Whether to fall back to byte-level `<0xXX>` tokens for OOV pieces. Upstream
+    /// default is `false`; the flag lives on `tokenizer.json`'s `model.byte_fallback`.
+    /// When `false`, an OOV piece emits the model's `unknownToken` if set, or nothing.
+    let byteFallback: Bool
 
     // MARK: - UInt64-Packed Merge Rank Helpers
 
@@ -236,18 +247,21 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         bpeRanks: [UInt64: Int],
         idsToTokens: [Int: NSString],
         stringToId: [String: Int]?,
-        tokenizerConfig: Config
+        tokenizerConfig: Config,
+        unknownToken: String?,
+        fuseUnknownTokens: Bool,
+        byteFallback: Bool
     ) {
         self.tokensToIds = tokensToIds
         self.bpeRanks = bpeRanks
         self.idsToTokens = idsToTokens
         self.stringToId = stringToId
 
-        if let unknownToken = TokenizerModel.unknownToken(from: tokenizerConfig) {
+        if let unknownToken {
             self.unknownToken = unknownToken
             unknownTokenId = tokensToIds[unknownToken as NSString]
         } else {
-            unknownToken = nil
+            self.unknownToken = nil
             unknownTokenId = nil
         }
 
@@ -257,7 +271,8 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         bosToken = tokenizerConfig.bosToken.tokenString
         bosTokenId = bosToken.flatMap { tokensToIds[$0 as NSString] }
 
-        fuseUnknownTokens = tokenizerConfig.fuseUnk.boolean(or: false)
+        self.fuseUnknownTokens = fuseUnknownTokens
+        self.byteFallback = byteFallback
     }
 
     // MARK: - Protocol Conformance Init
@@ -316,13 +331,31 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             bpeRanks = ranks
         }
 
+        // Upstream BPE serializes `unk_token`, `fuse_unk`, and `byte_fallback` as
+        // fields of `tokenizer.json`'s `model` block (see
+        // `tokenizers/src/models/bpe/serialization.rs`). `Config` reads camelCase
+        // keys, which transparently map to snake_case in the JSON.
         self.init(
             tokensToIds: tokensToIds,
             bpeRanks: bpeRanks,
             idsToTokens: Self.buildIdsToTokens(from: tokensToIds),
             stringToId: Self.buildStringToIdIfNeeded(from: tokensToIds),
-            tokenizerConfig: tokenizerConfig
+            tokenizerConfig: tokenizerConfig,
+            unknownToken: Self.resolveUnknownToken(tokenizerData: tokenizerData),
+            fuseUnknownTokens: tokenizerData.model["fuseUnk"].boolean(or: false),
+            byteFallback: tokenizerData.model["byteFallback"].boolean(or: false)
         )
+    }
+
+    /// Resolves the BPE model's unknown token from `tokenizer.json.model.unk_token`
+    /// only, matching Rust's `BPE::unk_token` (`tokenizers/src/models/bpe/model.rs`).
+    /// The tokenizer-level user-facing unknown token (whose sidecar resolution prefers
+    /// `tokenizer_config.json.unk_token`) is layered on top by
+    /// `PreTrainedTokenizer.unknownToken`, so reading the config key here would
+    /// make Swift's BPE fallback diverge from both Rust and Python fast tokenizers
+    /// when the two files disagree.
+    private static func resolveUnknownToken(tokenizerData: Config) -> String? {
+        tokenizerData.model["unkToken"].string()
     }
 
     // MARK: - Async Factory
@@ -336,7 +369,10 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         tokenizerConfig: Config,
         rawVocab: NSDictionary,
         rawMerges: [Any],
-        addedTokens: [String: Int]
+        addedTokens: [String: Int],
+        unknownToken: String?,
+        fuseUnknownTokens: Bool,
+        byteFallback: Bool
     ) async -> BPETokenizer {
         let rawVocab = ImmutableBox(value: rawVocab)
         let rawMerges = ImmutableBox(value: rawMerges)
@@ -362,7 +398,10 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             bpeRanks: bpeRanks.value,
             idsToTokens: idsToTokens.value,
             stringToId: stringToId.value,
-            tokenizerConfig: tokenizerConfig
+            tokenizerConfig: tokenizerConfig,
+            unknownToken: unknownToken,
+            fuseUnknownTokens: fuseUnknownTokens,
+            byteFallback: byteFallback
         )
     }
 
@@ -457,13 +496,41 @@ class BPETokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// - Returns: An array of BPE token strings
     func tokenize(text: String) -> [String] {
         var tokens: [String] = []
+        var previousWasUnknown = false
         let bpeTokens = bpe(token: text).split(separator: " ").map { String($0) }
         for token in bpeTokens {
-            if convertTokenToId(token) != unknownTokenId {
+            if tokensToIds[token as NSString] != nil || stringToId?[token] != nil {
                 tokens.append(token)
-            } else {
-                // TODO: if config.byte_fallback is False, append the unknown token instead
-                tokens.append(contentsOf: hexaEncode(text: token))
+                previousWasUnknown = false
+                continue
+            }
+
+            // Out-of-vocab piece. Upstream `tokenizers/src/models/bpe/model.rs`
+            // emits byte-fallback tokens only when `byte_fallback` is set AND
+            // every byte has a `<0xXX>` entry in the vocab; otherwise it falls
+            // back to the model's unk token (emitting nothing when there is
+            // none, as in Whisper where `model.unk_token` is `null`).
+            if byteFallback {
+                let byteTokens = hexaEncode(text: token)
+                let allInVocab = byteTokens.allSatisfy {
+                    tokensToIds[$0 as NSString] != nil || (stringToId?[$0] != nil)
+                }
+                if allInVocab {
+                    tokens.append(contentsOf: byteTokens)
+                    previousWasUnknown = false
+                    continue
+                }
+            }
+            if let unknownToken {
+                // Upstream `fuse_unk` (`bpe/model.rs`) extends a single unk entry
+                // by byte length instead of appending another; since Rust maps
+                // the id back through `vocab_r`, fused runs collapse to one
+                // `unk_token` string rather than two concatenated copies.
+                if fuseUnknownTokens, previousWasUnknown {
+                    continue
+                }
+                tokens.append(unknownToken)
+                previousWasUnknown = true
             }
         }
         return tokens

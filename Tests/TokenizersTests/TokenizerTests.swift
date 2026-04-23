@@ -143,14 +143,16 @@ struct TokenizerTests {
             }
         }
 
-        // Unknown token checks
-        let model = tokenizer.model
-        #expect(model.unknownTokenId == spec.unknownTokenId)
-        #expect(model.unknownTokenId == model.convertTokenToId("_this_token_does_not_exist_"))
-        if let unknownTokenId = model.unknownTokenId {
-            #expect(model.unknownToken == model.convertIdToToken(unknownTokenId))
-        } else {
-            #expect(model.unknownTokenId == nil)
+        // Unknown token checks. `tokenizer.unknownTokenId` composes the
+        // sidecar-style fallback (`tokenizer_config.json.unk_token` first, then
+        // the model's own `unk_token`), matching Python's user-facing
+        // `tokenizer.unk_token_id`. The underlying `model.unknownTokenId` is the
+        // model's own field only (e.g. nil for Whisper, whose
+        // `tokenizer.json.model.unk_token` is null).
+        #expect(tokenizer.unknownTokenId == spec.unknownTokenId)
+        if let modelUnknownId = tokenizer.model.unknownTokenId {
+            #expect(modelUnknownId == tokenizer.model.convertTokenToId("_this_token_does_not_exist_"))
+            #expect(tokenizer.model.unknownToken == tokenizer.model.convertIdToToken(modelUnknownId))
         }
     }
 
@@ -202,6 +204,46 @@ struct TokenizerTests {
         #expect(tokenizer.encode(text: "hello") == [15339])
         #expect(tokenizer.encode(text: "hello world") == [15339, 1917])
         #expect(tokenizer.encode(text: "<|im_start|>user<|im_sep|>Who are you?<|im_end|><|im_start|>assistant<|im_sep|>") == [100264, 882, 100266, 15546, 527, 499, 30, 100265, 100264, 78191, 100266])
+    }
+
+    /// Compact hub-integration coverage for model families on Python transformers
+    /// v5's `MODELS_WITH_INCORRECT_HUB_TOKENIZER_CLASS` force-map list. Each test
+    /// loads the model via `AutoTokenizer.from(directory:)` and asserts a small
+    /// encode output to pin the canonical behavior.
+    @Test
+    func qwen25() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "Qwen/Qwen2.5-0.5B-Instruct")
+        #expect(tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
+        #expect(
+            tokenizer.encode(text: "<|im_start|>user\nHello<|im_end|>")
+                == [151644, 872, 198, 9707, 151645]
+        )
+    }
+
+    @Test
+    func modernBert() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "answerdotai/ModernBERT-base")
+        #expect(tokenizer.encode(text: "Hello world") == [50281, 12092, 1533, 50282])
+    }
+
+    @Test
+    func gemma2() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "mlx-community/gemma-2-2b-it-4bit")
+        #expect(tokenizer.encode(text: "Who are you?") == [2, 6571, 708, 692, 235336])
+    }
+
+    @Test
+    func mistralV03() async throws {
+        let tokenizer = try await makeTokenizer(
+            hubModelName: "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+        )
+        #expect(tokenizer.encode(text: "Who are you?") == [1, 7294, 1228, 1136, 29572])
+    }
+
+    @Test
+    func ayaExpanse() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "mlx-community/aya-expanse-8b-4bit")
+        #expect(tokenizer.encode(text: "Who are you?") == [5, 33668, 1955, 1933, 38])
     }
 
     @Test
@@ -280,16 +322,7 @@ struct TokenizerTests {
     @Test
     func nllbTokenizer() async throws {
         let modelDirectory = try await downloadModel("Xenova/nllb-200-distilled-600M")
-
-        do {
-            _ = try await AutoTokenizer.from(directory: modelDirectory)
-            Issue.record("Expected Tokenizer.from to throw for strict mode")
-        } catch {
-            // Expected to throw in normal (strict) mode
-        }
-
-        // no strict mode proceeds
-        let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory, strict: false) as? PreTrainedTokenizer
+        let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
@@ -298,14 +331,22 @@ struct TokenizerTests {
         #expect(ids == expected)
     }
 
-    /// Deepseek needs a post-processor override to add a bos token as in the reference implementation
+    /// DeepSeek's `tokenizer.json` has a `ByteLevel` post-processor, which does not add
+    /// bos or eos. This matches canonical Python transformers v5 and upstream
+    /// `huggingface/tokenizers`. Users wanting the leading bos can switch to a
+    /// community re-upload whose `tokenizer.json` already uses `TemplateProcessing`.
+    ///
+    /// Reproduce with Python:
+    ///     from transformers import AutoTokenizer
+    ///     tok = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+    ///     assert tok.encode("Who are you?") == [15191, 525, 498, 30]
     @Test
     func deepSeekPostProcessor() async throws {
         let modelDirectory = try await downloadModel("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
         let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
-        #expect(tokenizer.encode(text: "Who are you?") == [151646, 15191, 525, 498, 30])
+        #expect(tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
     }
 
     /// Some Llama tokenizers already use a bos-prepending Template post-processor
@@ -416,49 +457,4 @@ struct TokenizerTests {
         #expect(tokenizer.encode(text: "She took a train to the West") == [6284, 5244, 1261, 10018, 1317, 1278, 5046])
     }
 
-    #if TOKENIZERS_SWIFT_BACKEND
-    @Test
-    func concurrentTokenizerRegistration() async throws {
-        // Test that concurrent registration doesn't cause crashes or data races.
-        // This validates the thread-safety of AutoTokenizer.register().
-
-        final class MockTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
-            let bosToken: String? = nil
-            let bosTokenId: Int? = nil
-            let eosToken: String? = nil
-            let eosTokenId: Int? = nil
-            let unknownToken: String? = nil
-            let unknownTokenId: Int? = nil
-            var fuseUnknownTokens: Bool { false }
-
-            required init(
-                tokenizerConfig: Config, tokenizerData: Config, addedTokens: [String: Int],
-                vocab: TokenizerVocab? = nil, merges: TokenizerMerges? = nil
-            ) throws {}
-            func tokenize(text: String) -> [String] { [] }
-            func convertTokenToId(_ token: String) -> Int? { nil }
-            func convertIdToToken(_ id: Int) -> String? { nil }
-            func encode(text: String) -> [Int] { [] }
-            func decode(tokenIds: [Int]) -> String { "" }
-        }
-
-        // Register from multiple concurrent tasks
-        await withTaskGroup(of: Void.self) { group in
-            for i in 0..<100 {
-                group.addTask {
-                    AutoTokenizer.register(MockTokenizer.self, for: "ConcurrentTestTokenizer\(i)")
-                }
-            }
-        }
-
-        // Verify registrations succeeded by checking we can look them up
-        await withTaskGroup(of: Void.self) { group in
-            for i in 0..<100 {
-                group.addTask {
-                    _ = TokenizerModel.tokenizerClass(for: "ConcurrentTestTokenizer\(i)")
-                }
-            }
-        }
-    }
-    #endif
 }

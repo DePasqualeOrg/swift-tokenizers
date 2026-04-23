@@ -5,16 +5,24 @@ use std::path::Path;
 
 use crate::core::tokenizer_json::{self, TokenizerJsonMetadata};
 
+// `tokenizer.json`'s `post_processor` is the sole source of truth for which
+// special tokens get prepended or appended. Python `transformers` v5 takes
+// the same stance: `PreTrainedTokenizerBase.from_pretrained` pops
+// `add_bos_token` / `add_eos_token` from `init_kwargs` whenever a
+// `tokenizer.json` is present, so they never reach
+// `PreTrainedTokenizerFast.update_post_processor`. A tokenizer that needs a
+// leading bos must carry it in its `tokenizer.json` post-processor.
+//
+// `fuse_unk` is intentionally absent: upstream serializes it on each model
+// block in `tokenizer.json` (BPE / Unigram), and the Rust `tokenizers` library
+// applies the fusion inside its tokenize path. Neither Python `transformers` v5
+// nor the `tokenizers` library ever reads the flag from `tokenizer_config.json`,
+// so mirroring it into the runtime config would be dead duplication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RuntimeConfiguration {
     pub(crate) bos_token: Option<String>,
     pub(crate) eos_token: Option<String>,
     pub(crate) unknown_token: Option<String>,
-    pub(crate) add_bos_token: bool,
-    pub(crate) add_eos_token: bool,
-    pub(crate) legacy: Option<bool>,
-    pub(crate) tokenizer_class: Option<String>,
-    pub(crate) model_type: Option<String>,
     pub(crate) sep_token: Option<String>,
     pub(crate) pad_token: Option<String>,
     pub(crate) cls_token: Option<String>,
@@ -23,7 +31,6 @@ pub(crate) struct RuntimeConfiguration {
     pub(crate) clean_up_tokenization_spaces: bool,
     pub(crate) model_max_length: Option<u64>,
     pub(crate) chat_template: Option<JsonValue>,
-    pub(crate) fuse_unknown_tokens: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -50,7 +57,6 @@ fn load_runtime_configuration_impl(
     tokenizer_metadata: Option<&TokenizerJsonMetadata>,
 ) -> RuntimeConfiguration {
     let tokenizer_config = read_optional_json_file(&directory.join("tokenizer_config.json"));
-    let model_config = read_optional_json_file(&directory.join("config.json"));
     let chat_template_override = load_chat_template_override(directory);
 
     let bos_token = tokenizer_json::extract_token_string(
@@ -76,44 +82,6 @@ fn load_runtime_configuration_impl(
         bos_token,
         eos_token,
         unknown_token,
-        add_bos_token: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("add_bos_token"))
-            .and_then(JsonValue::as_bool)
-            .unwrap_or(false),
-        add_eos_token: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("add_eos_token"))
-            .and_then(JsonValue::as_bool)
-            .unwrap_or(false),
-        legacy: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("legacy"))
-            .and_then(JsonValue::as_bool),
-        tokenizer_class: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("tokenizer_class"))
-            .and_then(JsonValue::as_str)
-            .map(ToOwned::to_owned)
-            .or_else(|| {
-                model_config
-                    .as_ref()
-                    .and_then(|config| config.get("tokenizer_class"))
-                    .and_then(JsonValue::as_str)
-                    .map(ToOwned::to_owned)
-            }),
-        model_type: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("model_type"))
-            .and_then(JsonValue::as_str)
-            .map(ToOwned::to_owned)
-            .or_else(|| {
-                model_config
-                    .as_ref()
-                    .and_then(|config| config.get("model_type"))
-                    .and_then(JsonValue::as_str)
-                    .map(ToOwned::to_owned)
-            }),
         sep_token: tokenizer_json::extract_token_string(
             tokenizer_config
                 .as_ref()
@@ -155,16 +123,13 @@ fn load_runtime_configuration_impl(
                 .filter(|value| !value.is_null())
                 .cloned()
         }),
-        fuse_unknown_tokens: tokenizer_config
-            .as_ref()
-            .and_then(|config| config.get("fuse_unk"))
-            .and_then(JsonValue::as_bool)
-            .unwrap_or_else(|| tokenizer_metadata.map(|metadata| metadata.fuse_unknown_tokens).unwrap_or(false)),
     }
 }
 
 fn extract_u64(value: &JsonValue) -> Option<u64> {
-    value.as_u64().or_else(|| value.as_i64().and_then(|value| u64::try_from(value).ok()))
+    value
+        .as_u64()
+        .or_else(|| value.as_i64().and_then(|value| u64::try_from(value).ok()))
 }
 
 fn read_optional_json_file(path: &Path) -> Option<JsonValue> {

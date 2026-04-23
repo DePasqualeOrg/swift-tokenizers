@@ -43,14 +43,16 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
         }
     }
 
+    // `tokenizer.json`'s `post_processor` is the sole source of truth for which
+    // special tokens get prepended or appended. Python `transformers` v5 takes
+    // the same stance: `PreTrainedTokenizerBase.from_pretrained` pops
+    // `add_bos_token` / `add_eos_token` from `init_kwargs` whenever a
+    // `tokenizer.json` is present, so they never reach
+    // `PreTrainedTokenizerFast.update_post_processor`. A tokenizer that needs a
+    // leading bos must carry it in its `tokenizer.json` post-processor.
     package let bosToken: String?
     package let eosToken: String?
     package let unknownToken: String?
-    package let addBosToken: Bool
-    package let addEosToken: Bool
-    package let legacy: Bool?
-    package let tokenizerClass: String?
-    package let modelType: String?
     package let sepToken: String?
     package let padToken: String?
     package let clsToken: String?
@@ -59,17 +61,11 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
     package let cleanUpTokenizationSpaces: Bool
     package let modelMaxLength: Int?
     package let chatTemplate: ChatTemplateSource
-    package let fuseUnknownTokens: Bool
 
     package init(tokenizerConfig: Config) {
         bosToken = tokenizerConfig.bosToken.tokenString
         eosToken = tokenizerConfig.eosToken.tokenString
         unknownToken = tokenizerConfig.unkToken.tokenString
-        addBosToken = tokenizerConfig.addBosToken.boolean(or: false)
-        addEosToken = tokenizerConfig.addEosToken.boolean(or: false)
-        legacy = tokenizerConfig.legacy.boolean()
-        tokenizerClass = tokenizerConfig.tokenizerClass.string()
-        modelType = tokenizerConfig.modelType.string()
         sepToken = tokenizerConfig.sepToken.tokenString
         padToken = tokenizerConfig.padToken.tokenString
         clsToken = tokenizerConfig.clsToken.tokenString
@@ -78,7 +74,6 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
         cleanUpTokenizationSpaces = tokenizerConfig.cleanUpTokenizationSpaces.boolean(or: true)
         modelMaxLength = tokenizerConfig.modelMaxLength.integer()
         chatTemplate = TokenizerRuntimeConfiguration.chatTemplateSource(from: tokenizerConfig.chatTemplate)
-        fuseUnknownTokens = tokenizerConfig.fuseUnk.boolean(or: false)
     }
 
     package var hasChatTemplate: Bool {

@@ -42,11 +42,19 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// Mapping from token strings to their numeric IDs.
     let tokensToIds: [NSString: Int]
 
-    /// The beginning-of-sequence token (hardcoded as space for Unigram).
-    let bosToken: String? = " "
+    /// The beginning-of-sequence token, read from `tokenizer_config.json` like the
+    /// other models. Unigram upstream has no model-level bos; the lattice's sentinel
+    /// id is tracked separately via `latticeBosTokenId`.
+    let bosToken: String?
 
-    /// The numeric ID of the beginning-of-sequence token.
+    /// The numeric ID of the beginning-of-sequence token, resolved through the
+    /// vocabulary.
     let bosTokenId: Int?
+
+    /// Sentinel token id used to seed the Viterbi lattice. Any value works because
+    /// the BOS lattice node has length 0 and contributes no score; we just need a
+    /// stable placeholder.
+    private let latticeBosTokenId: Int
 
     /// The end-of-sequence token string, if defined.
     let eosToken: String?
@@ -54,8 +62,11 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// The numeric ID of the end-of-sequence token, if defined.
     let eosTokenId: Int?
 
-    /// Whether consecutive unknown tokens should be fused (always true for Unigram).
-    let fuseUnknownTokens: Bool = true
+    /// Whether consecutive unknown tokens should be fused. Upstream's `Unigram::from`
+    /// in `tokenizers/src/models/unigram/model.rs` defaults this to `true` when
+    /// constructing the model; the flag lives on `tokenizer.json`'s `model.fuse_unk`,
+    /// not in `tokenizer_config.json`.
+    let fuseUnknownTokens: Bool
 
     private let trie: Trie<Character>
 
@@ -130,6 +141,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         trie: Trie<Character>,
         minScore: Float,
         unknownTokenId: Int,
+        fuseUnknownTokens: Bool,
         tokenizerConfig: Config
     ) {
         self.vocab = vocab
@@ -137,13 +149,18 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         self.trie = trie
         self.minScore = minScore
         self.unknownTokenId = unknownTokenId
+        self.fuseUnknownTokens = fuseUnknownTokens
         self.unknownPiece = SentencePieceToken(
             token: vocab[unknownTokenId].token,
             score: minScore - 10
         )
 
-        // bosToken is hardcoded as " " for Unigram tokenizers
-        self.bosTokenId = tokensToIds[" " as NSString]
+        let bos = tokenizerConfig.bosToken.tokenString
+        self.bosToken = bos
+        self.bosTokenId = bos.flatMap { tokensToIds[$0 as NSString] }
+        // The lattice only needs a stable placeholder id for the length-0 BOS
+        // node, so fall back to 0 when no vocab entry resolves.
+        self.latticeBosTokenId = self.bosTokenId ?? 0
 
         let eos = tokenizerConfig.eosToken.string()
         self.eosToken = eos
@@ -211,6 +228,13 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
         guard let unknownTokenId = tokenizerData.model["unkId"].integer() else {
             throw TokenizerError.malformedVocab
         }
+        // Upstream raises `UnigramError::MissingUnkId` at tokenize time. Our
+        // non-throwing tokenize signature can't bubble, and the designated init
+        // accesses `vocab[unknownTokenId]` — turn a silent index-out-of-range crash
+        // into a clear error.
+        guard unknownTokenId < vocabArray.count else {
+            throw TokenizerError.missingUnknownToken(model: "Unigram")
+        }
 
         self.init(
             vocab: vocabArray,
@@ -218,6 +242,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             trie: Self.buildTrie(from: vocabArray),
             minScore: Self.computeMinScore(from: vocabArray),
             unknownTokenId: unknownTokenId,
+            fuseUnknownTokens: tokenizerData.model["fuseUnk"].boolean(or: true),
             tokenizerConfig: tokenizerConfig
         )
     }
@@ -249,6 +274,9 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
 
         // Phase 1: Parse raw vocab (sequential, all other phases depend on this)
         let vocabArray = buildVocab(from: rawVocab)
+        guard unknownTokenId < vocabArray.count else {
+            throw TokenizerError.missingUnknownToken(model: "Unigram")
+        }
 
         // Phase 2: Build independent data structures in parallel
         async let tokensToIdsTask = buildTokensToIdsBox(from: vocabArray)
@@ -265,6 +293,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             trie: trie,
             minScore: minScore,
             unknownTokenId: unknownTokenId,
+            fuseUnknownTokens: tokenizerData.model["fuseUnk"].boolean(or: true),
             tokenizerConfig: tokenizerConfig
         )
     }
@@ -294,7 +323,7 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
     /// - Parameter text: The input text to tokenize
     /// - Returns: An array of token strings representing the most probable segmentation
     func tokenize(text: String) -> [String] {
-        var lattice = TokenLattice(sentence: text, bosTokenId: bosTokenId ?? 0, eosTokenId: eosTokenId ?? 0)
+        var lattice = TokenLattice(sentence: text, bosTokenId: latticeBosTokenId, eosTokenId: eosTokenId ?? 0)
 
         // Populate nodes
         let sentence = lattice.sentence
@@ -305,7 +334,10 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
 
             let beginIndex = sentence.index(sentence.startIndex, offsetBy: beginPos)
             for token in trie.commonPrefixSearchIterator(sentence[beginIndex...]).map({ String($0) }) {
-                guard let tokenId = tokensToIds[token as NSString] else { fatalError("Token not in vocab: \(token)") }
+                // The trie is built from the same vocab as `tokensToIds`, so a miss
+                // here indicates a corrupted tokenizer; skip the node and let the
+                // unknown fallback below cover the position.
+                guard let tokenId = tokensToIds[token as NSString] else { continue }
                 let tokenScore = vocab[tokenId].score
                 lattice.insert(startOffset: beginPos, length: token.count, score: tokenScore, tokenId: tokenId)
                 if !hasSingleNode, token.count == mblen {
@@ -318,7 +350,26 @@ class UnigramTokenizer: PreTrainedTokenizerModel, @unchecked Sendable {
             beginPos += mblen
         }
 
-        return lattice.tokens
+        // Upstream `Unigram::tokenize` (`tokenizers/src/models/unigram/model.rs`)
+        // fuses consecutive unknown nodes by accumulating their raw text spans
+        // and flushing them as a single token on the next non-unknown boundary.
+        // Each unknown node covers exactly one character, so string concatenation
+        // of the spans matches upstream's byte-span concatenation.
+        let viterbiNodes = lattice.viterbi()
+        var tokens: [String] = []
+        tokens.reserveCapacity(viterbiNodes.count)
+        var previousWasUnknown = false
+        for node in viterbiNodes {
+            let piece = String(lattice.piece(node))
+            let isUnknown = node.tokenId == unknownTokenId
+            if fuseUnknownTokens, isUnknown, previousWasUnknown, let last = tokens.last {
+                tokens[tokens.count - 1] = last + piece
+            } else {
+                tokens.append(piece)
+            }
+            previousWasUnknown = isUnknown
+        }
+        return tokens
     }
 }
 #endif

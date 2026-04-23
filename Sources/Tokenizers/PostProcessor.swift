@@ -4,6 +4,28 @@
 import Foundation
 import TokenizersCore
 
+/// A string paired with an optional token ID, preserved through post-processing.
+///
+/// Upstream Rust tokenizers keeps each added-token match as a `Token` struct
+/// carrying both the widened/normalized slice (`value`) and the added-token's
+/// numeric ID. That association survives the post-processing pipeline so the
+/// Rust encoding's `ids` and `tokens` arrays stay in sync even when the value
+/// string isn't a vocabulary key (e.g., `" <mask>"` with `lstrip: true`).
+///
+/// Swift mirrors that by threading `PostProcessorToken` through the pipeline.
+/// `idOverride` is nil for model-produced tokens (id resolved later via the
+/// model's vocab) and set for added-token matches whose value is the widened
+/// slice rather than the vocab-key content.
+public struct PostProcessorToken: Sendable, Equatable {
+    public let value: String
+    public let idOverride: Int?
+
+    public init(value: String, idOverride: Int? = nil) {
+        self.value = value
+        self.idOverride = idOverride
+    }
+}
+
 /// A protocol for post-processing operations applied after tokenization.
 ///
 /// Post-processors handle the final stage of tokenization, typically adding
@@ -19,6 +41,18 @@ public protocol PostProcessor {
     /// - Returns: The post-processed token sequence
     func postProcess(tokens: [String], tokensPair: [String]?, addSpecialTokens: Bool) -> [String]
 
+    /// ID-aware post-processing. Built-in post-processors override this to
+    /// preserve the `idOverride` on added-token matches (see
+    /// `PostProcessorToken`), so `encode` can return the added-token ID for a
+    /// widened value that isn't a vocab key. The default implementation
+    /// delegates to the string-based method and drops any overrides, which
+    /// keeps pre-existing user-implemented conformers working unchanged.
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken]
+
     /// Initializes the post-processor from configuration.
     ///
     /// - Parameter config: The configuration for this post-processor
@@ -32,6 +66,30 @@ extension PostProcessor {
     }
 
     func callAsFunction(tokens: [String], tokensPair: [String]? = nil, addSpecialTokens: Bool = true) -> [String] {
+        postProcess(tokens: tokens, tokensPair: tokensPair, addSpecialTokens: addSpecialTokens)
+    }
+
+    /// Default ID-aware post-processing: delegate to the string version, losing
+    /// any `idOverride`. Built-in post-processors override this to preserve
+    /// overrides positionally.
+    public func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] {
+        let processedStrings = postProcess(
+            tokens: tokens.map { $0.value },
+            tokensPair: tokensPair?.map { $0.value },
+            addSpecialTokens: addSpecialTokens
+        )
+        return processedStrings.map { PostProcessorToken(value: $0) }
+    }
+
+    func callAsFunction(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]? = nil,
+        addSpecialTokens: Bool = true
+    ) -> [PostProcessorToken] {
         postProcess(tokens: tokens, tokensPair: tokensPair, addSpecialTokens: addSpecialTokens)
     }
 }
@@ -93,11 +151,40 @@ class TemplateProcessing: PostProcessor {
         }
         return toReturn
     }
+
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] {
+        let config = tokensPair == nil ? single : pair
+
+        var toReturn: [PostProcessorToken] = []
+        for item in config {
+            if let id = item.SpecialToken.id.string() {
+                if addSpecialTokens {
+                    // Inserted special: the ID is resolved later via the model's vocab.
+                    toReturn.append(PostProcessorToken(value: id))
+                }
+            } else if item.Sequence.id.string() == "A" {
+                toReturn += tokens
+            } else if item.Sequence.id.string() == "B" {
+                toReturn += tokensPair!
+            }
+        }
+        return toReturn
+    }
 }
 
 class ByteLevelPostProcessor: PostProcessor {
     required init(config: Config) {}
     func postProcess(tokens: [String], tokensPair: [String]?, addSpecialTokens: Bool) -> [String] { tokens }
+
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] { tokens }
 }
 
 class RobertaProcessing: PostProcessor {
@@ -124,6 +211,10 @@ class RobertaProcessing: PostProcessor {
     func postProcess(tokens: [String], tokensPair: [String]?, addSpecialTokens: Bool) -> [String] {
         var outTokens = tokens
         var tokensPair = tokensPair
+        // Upstream `RobertaProcessing::process_encoded` in
+        // `tokenizers/src/processors/roberta.rs` runs `process_offsets` (offset
+        // trimming) before the `add_special_tokens` check — so whitespace trimming
+        // here applies regardless of whether specials are added.
         if trimOffset {
             if addPrefixSpace {
                 outTokens = outTokens.map { trimExtraSpaces(token: $0) }
@@ -134,6 +225,11 @@ class RobertaProcessing: PostProcessor {
             }
         }
 
+        // Matches upstream's `if !add_special_tokens { return ...; }` early-return.
+        guard addSpecialTokens else {
+            return outTokens + (tokensPair ?? [])
+        }
+
         outTokens = [cls.1] + outTokens + [sep.1]
         if let tokensPair, !tokensPair.isEmpty {
             // Yes, it adds another `sep`.
@@ -142,6 +238,52 @@ class RobertaProcessing: PostProcessor {
         }
 
         return outTokens
+    }
+
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] {
+        // Mirror the [String] path but preserve `idOverride` on each passthrough
+        // token. Trimming only touches `value`; the added-token id stays put.
+        var outTokens = tokens
+        var tokensPair = tokensPair
+        if trimOffset {
+            if addPrefixSpace {
+                outTokens = outTokens.map { trimExtraSpacesPreservingId($0) }
+                tokensPair = tokensPair?.map { trimExtraSpacesPreservingId($0) }
+            } else {
+                outTokens = outTokens.map {
+                    PostProcessorToken(
+                        value: $0.value.trimmingCharacters(in: .whitespaces),
+                        idOverride: $0.idOverride
+                    )
+                }
+                tokensPair = tokensPair?.map {
+                    PostProcessorToken(
+                        value: $0.value.trimmingCharacters(in: .whitespaces),
+                        idOverride: $0.idOverride
+                    )
+                }
+            }
+        }
+
+        guard addSpecialTokens else {
+            return outTokens + (tokensPair ?? [])
+        }
+
+        // Inserted `cls` / `sep` resolve later via the model's vocab.
+        outTokens = [PostProcessorToken(value: cls.1)] + outTokens + [PostProcessorToken(value: sep.1)]
+        if let tokensPair, !tokensPair.isEmpty {
+            outTokens += [PostProcessorToken(value: sep.1)] + tokensPair + [PostProcessorToken(value: sep.1)]
+        }
+
+        return outTokens
+    }
+
+    private func trimExtraSpacesPreservingId(_ token: PostProcessorToken) -> PostProcessorToken {
+        PostProcessorToken(value: trimExtraSpaces(token: token.value), idOverride: token.idOverride)
     }
 
     /// Some tokens need one space around them
@@ -190,6 +332,21 @@ class BertProcessing: PostProcessor {
 
         return outTokens
     }
+
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] {
+        guard addSpecialTokens else { return tokens + (tokensPair ?? []) }
+
+        var outTokens = [PostProcessorToken(value: cls.1)] + tokens + [PostProcessorToken(value: sep.1)]
+        if let tokensPair, !tokensPair.isEmpty {
+            outTokens += tokensPair + [PostProcessorToken(value: sep.1)]
+        }
+
+        return outTokens
+    }
 }
 
 class SequenceProcessing: PostProcessor {
@@ -211,6 +368,27 @@ class SequenceProcessing: PostProcessor {
             let processed = processor.postProcess(tokens: currentTokens, tokensPair: currentTokensPair, addSpecialTokens: addSpecialTokens)
             currentTokens = processed
             currentTokensPair = nil // After the first processor, we no longer have a separate pair
+        }
+
+        return currentTokens
+    }
+
+    func postProcess(
+        tokens: [PostProcessorToken],
+        tokensPair: [PostProcessorToken]?,
+        addSpecialTokens: Bool
+    ) -> [PostProcessorToken] {
+        var currentTokens = tokens
+        var currentTokensPair = tokensPair
+
+        for processor in processors {
+            let processed = processor.postProcess(
+                tokens: currentTokens,
+                tokensPair: currentTokensPair,
+                addSpecialTokens: addSpecialTokens
+            )
+            currentTokens = processed
+            currentTokensPair = nil
         }
 
         return currentTokens

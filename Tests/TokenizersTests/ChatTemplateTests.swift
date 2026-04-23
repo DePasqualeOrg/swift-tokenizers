@@ -69,15 +69,11 @@ struct ChatTemplateTests {
     func templateFromConfig() async throws {
         let tokenizer = try await Self.sharedPhiTokenizer()
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
-        let encodedTarget = backendValue(
-            swift: [32010, 4002, 29581, 278, 14156, 8720, 4086, 29889, 32007, 32001],
-            rust: [32010, 20355, 915, 278, 14156, 8720, 4086, 29889, 32007, 32001]
-        )
+        // Both backends now run the canonical tokenizer.json pipeline with no Llama
+        // shim, so encode / decode converge on the same output.
+        let encodedTarget = [32010, 20355, 915, 278, 14156, 8720, 4086, 29889, 32007, 32001]
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = backendValue(
-            swift: "<|user|>Describe the Swift programming language.<|end|><|assistant|>",
-            rust: "<|user|> Describe the Swift programming language.<|end|><|assistant|>"
-        )
+        let decodedTarget = "<|user|> Describe the Swift programming language.<|end|><|assistant|>"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }
@@ -119,21 +115,12 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: messages, chatTemplate: .literal(mistral7BDefaultTemplate)
         )
-        let encodedTarget = backendValue(
-            swift: [
-                1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914,
-                25580, 29962,
-            ],
-            rust: [
-                1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
-                29914, 25580, 29962,
-            ]
-        )
+        let encodedTarget = [
+            1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
+            29914, 25580, 29962,
+        ]
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = backendValue(
-            swift: "<s> [INST] Describe the Swift programming language. [/INST]",
-            rust: "<s>  [INST] Describe the Swift programming language. [/INST]"
-        )
+        let decodedTarget = "<s>  [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }
@@ -147,21 +134,12 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: messages, chatTemplate: mistral7BDefaultTemplate
         )
-        let encodedTarget = backendValue(
-            swift: [
-                1, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518, 29914,
-                25580, 29962,
-            ],
-            rust: [
-                1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
-                29914, 25580, 29962,
-            ]
-        )
+        let encodedTarget = [
+            1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
+            29914, 25580, 29962,
+        ]
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let decodedTarget = backendValue(
-            swift: "<s> [INST] Describe the Swift programming language. [/INST]",
-            rust: "<s>  [INST] Describe the Swift programming language. [/INST]"
-        )
+        let decodedTarget = "<s>  [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
     }

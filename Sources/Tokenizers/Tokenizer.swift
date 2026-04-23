@@ -34,10 +34,10 @@ public typealias ToolSpec = [String: any Sendable]
 /// Errors that can occur during tokenizer operations.
 public enum TokenizerError: LocalizedError, Equatable {
     case missingConfig
-    case missingTokenizerClassInConfig
-    case unsupportedTokenizer(String)
+    case unsupportedModelType(String)
     case missingVocab
     case malformedVocab
+    case missingUnknownToken(model: String)
     case chatTemplate(String)
     case missingChatTemplate
     case tooLong(String)
@@ -49,14 +49,14 @@ public enum TokenizerError: LocalizedError, Equatable {
         switch self {
         case .missingConfig:
             "Tokenizer configuration is missing."
-        case .missingTokenizerClassInConfig:
-            "The tokenizer class is not specified in the configuration."
-        case let .unsupportedTokenizer(name):
-            "The tokenizer type '\(name)' is not supported."
+        case let .unsupportedModelType(type):
+            unsupportedModelTypeMessage(for: type)
         case .missingVocab:
             "Vocabulary file is missing from the tokenizer configuration."
         case .malformedVocab:
             "The vocabulary file is malformed or corrupted."
+        case let .missingUnknownToken(model):
+            "Configured unknown token is not present in the \(model) vocabulary."
         case let .chatTemplate(message):
             "Chat template error: \(message)"
         case .missingChatTemplate:
@@ -71,6 +71,11 @@ public enum TokenizerError: LocalizedError, Equatable {
             "Missing '\(field)' in \(component) configuration"
         }
     }
+}
+
+private func unsupportedModelTypeMessage(for type: String) -> String {
+    let display = type.isEmpty ? "<missing>" : "'\(type)'"
+    return "Unsupported tokenizer.json `model.type`: \(display). Expected BPE, WordPiece, Unigram, or WordLevel."
 }
 
 package enum JSONBridge {
