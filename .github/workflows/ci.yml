@@ -64,6 +64,18 @@ jobs:
             - name: Build tests
               run: swift build --build-tests
 
+    docs:
+        # macos-26 runs a Swift toolchain new enough for `swift package --traits`
+        # (added after swift build / swift test picked up the flag). macos-latest
+        # currently points at an older image that rejects it.
+        name: Documentation
+        runs-on: macos-26
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Verify documentation
+              run: bash scripts/verify-docs.sh
+
     lint:
         name: Lint
         runs-on: macos-latest

@@ -74,6 +74,7 @@ let tokenizerDirectorySources =
     + tokenizerRustBackendSources
 
 let benchmarksEnabled = Context.environment["TOKENIZERS_ENABLE_BENCHMARKS"] == "1"
+let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
 let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH"]
 
 func excludedTokenizerSources(keeping sources: [String]) -> [String] {
@@ -93,6 +94,12 @@ if benchmarksEnabled {
             url: "https://github.com/ml-explore/mlx-swift-lm.git",
             revision: "8c9dd6391139242261bcf27d253c326f9cf2d567"
         )
+    )
+}
+
+if docsEnabled {
+    packageDependencies.append(
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.0")
     )
 }
 
@@ -156,10 +163,20 @@ var packageTargets: [Target] = [
             .target(name: "TokenizersRustBackend", condition: .when(traits: ["Rust"])),
         ],
         path: "Sources/TokenizersFacade",
-        swiftSettings: [
-            .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
-            .define("Rust", .when(traits: ["Rust"])),
-        ]
+        swiftSettings: {
+            var settings: [SwiftSetting] = [
+                .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+                .define("Rust", .when(traits: ["Rust"])),
+            ]
+            if docsEnabled {
+                // swift-docc-plugin does not propagate package traits to its
+                // symbol-graph sub-builds, so the facade is compiled with both
+                // backends enabled at once. Signal that to BackendSelection.swift
+                // so it can skip the mutex guard for the docs build only.
+                settings.append(.define("TOKENIZERS_DOCS_BUILD"))
+            }
+            return settings
+        }()
     ),
     .testTarget(
         name: "TokenizersTests",
