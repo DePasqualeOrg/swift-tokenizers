@@ -193,11 +193,38 @@ while true; do
       mv "${tmp_manifest}" "${pin_file}"
       trap - EXIT
 
-      git add "${pin_file}"
+      # Mirror the XCFramework URL and checksum into Package.swift's inline constants.
+      # Package.swift reads the pinned values from these constants rather than Pin.json
+      # because manifest-eval file I/O is unreliable for URL-based dependency consumers.
+      manifest_url="$(jq -r '.xcframework_url' "${pin_file}")"
+      manifest_checksum="$(jq -r '.checksum' "${pin_file}")"
+      package_swift="${REPO_ROOT}/Package.swift"
+      python3 - "${package_swift}" "${manifest_url}" "${manifest_checksum}" <<'PY'
+import re
+import sys
+
+path, url, checksum = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path, "r", encoding="utf-8") as f:
+    text = f.read()
+text = re.sub(
+    r'(let tokenizersRustXCFrameworkURL\s*=\s*\n?\s*")[^"]*(")',
+    lambda m: m.group(1) + url + m.group(2),
+    text,
+)
+text = re.sub(
+    r'(let tokenizersRustXCFrameworkChecksum\s*=\s*\n?\s*")[^"]*(")',
+    lambda m: m.group(1) + checksum + m.group(2),
+    text,
+)
+with open(path, "w", encoding="utf-8") as f:
+    f.write(text)
+PY
+
+      git add "${pin_file}" "${package_swift}"
       git commit -m "Pin Rust XCFramework to tokenizers-rust-${VERSION}"
 
       echo
-      echo "Committed rust/Pin.json bump to tokenizers-rust-${VERSION}."
+      echo "Committed rust/Pin.json and Package.swift bump to tokenizers-rust-${VERSION}."
       echo "Push the branch and open or update the PR when ready."
       exit 0
     fi
