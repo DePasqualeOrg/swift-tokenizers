@@ -2,14 +2,15 @@
 # Cut a Swift package release.
 #
 # Tags a new package version on an existing commit, pushes the tag, and
-# creates a matching GitHub release whose body links to the paired Rust
-# artifact release (tokenizers-rust-<version>) and embeds an auto-generated
+# creates a matching GitHub release whose body links to the Rust artifact
+# release pinned in rust/Pin.json and embeds an auto-generated
 # "What's Changed" PR list since the previous package release.
 #
-# Intended to run after cut-release.sh has published the Rust artifact and
-# committed the matching rust/Pin.json bump. Normally invoked from `main`
-# after that PR has merged, so HEAD already points at the commit whose
-# Pin.json pins tokenizers-rust-<version>.
+# Intended to run from `main` after the commit you want to tag has been
+# merged. HEAD's rust/Pin.json must point at an existing Rust artifact
+# release, but the pinned Rust version does not need to match the Swift
+# package version — Swift-only patch releases reuse whatever Rust artifact
+# is already pinned.
 #
 # Usage: scripts/rust/release/publish-package-release.sh <version> [<ref>]
 #   <version>  Semantic version for the package tag, e.g. 0.4.1 or 0.4.1-rc.1.
@@ -48,19 +49,21 @@ if gh release view "${VERSION}" >/dev/null 2>&1; then
   exit 1
 fi
 
-# The commit we are about to tag must already pin the matching Rust
-# artifact version. If Pin.json at ${REF} points at a different version,
-# consumers of the package would end up with a Swift tag whose embedded
-# XCFramework URL/checksum does not match its label.
+# Read the Rust artifact version pinned at ${REF} and verify the release
+# exists. Swift package versions and Rust artifact versions are independent:
+# a Swift-only patch release reuses the existing Rust pin, so pin_version
+# may lag VERSION. The required invariant is that whichever Rust artifact
+# Pin.json points at actually exists upstream.
 pin_version="$(git show "${REF}:${PIN_FILE}" | jq -r '.version')"
-if [[ "${pin_version}" != "${VERSION}" ]]; then
-  echo "${PIN_FILE} at ${REF} pins ${pin_version}, not ${VERSION}." >&2
-  exit 1
-fi
+rust_release_url="$(gh release view "tokenizers-rust-${pin_version}" --json url --jq '.url')"
 
-# Verify the paired Rust artifact release exists (cut-release.sh should
-# have created it already) and capture its URL for the release body.
-rust_release_url="$(gh release view "tokenizers-rust-${VERSION}" --json url --jq '.url')"
+# Guard against drift between Package.swift's inline Rust pin and
+# rust/Pin.json at ${REF}. CI runs the same check against the working
+# tree on every push; this is the last-mile guard against tagging a
+# ref where the two have drifted.
+bash "${REPO_ROOT}/scripts/rust/release/check-package-swift-pin.sh" \
+  <(git show "${REF}:Package.swift") \
+  <(git show "${REF}:${PIN_FILE}")
 
 # Create and push an annotated tag. Annotated (not lightweight) so `git
 # describe` and GitHub's release UI treat it as a first-class tag object.

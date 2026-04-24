@@ -103,6 +103,9 @@ jobs:
             - name: Check Rust source hash against rust/Pin.json
               run: bash scripts/rust/release/check-pin.sh
 
+            - name: Check Package.swift inline pin matches rust/Pin.json
+              run: bash scripts/rust/release/check-package-swift-pin.sh
+
             - name: Check for pre-release pin on main
               if: |
                   (github.event_name == 'pull_request' && github.base_ref == 'main')
