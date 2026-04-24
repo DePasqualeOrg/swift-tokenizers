@@ -81,3 +81,20 @@ jobs:
                   echo "# Format all Swift files" >> $GITHUB_STEP_SUMMARY
                   echo 'swift format -i --recursive .' >> $GITHUB_STEP_SUMMARY
                   echo '```' >> $GITHUB_STEP_SUMMARY
+
+    rust-pin-guard:
+        name: Rust pin guard
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Check Rust source hash against rust/Pin.json
+              run: bash scripts/rust/release/check-pin.sh
+
+            - name: Check for pre-release pin on main
+              if: |
+                  (github.event_name == 'pull_request' && github.base_ref == 'main')
+                  || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+              env:
+                  ALLOW_PRERELEASE_PIN: ${{ vars.ALLOW_PRERELEASE_PIN }}
+              run: bash scripts/rust/release/check-prerelease-pin.sh

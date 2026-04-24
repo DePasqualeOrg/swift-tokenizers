@@ -5,8 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 VERSION="${1:?usage: scripts/rust/release/publish-package-release.sh <version> [<ref>]}"
 REF="${2:-HEAD}"
-PACKAGE_FILE="Package.swift"
-EXPECTED_ARTIFACT_PATH="releases/download/tokenizers-rust-${VERSION}/TokenizersRust-${VERSION}.xcframework.zip"
+PIN_FILE="rust/Pin.json"
 
 if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
   echo "Version must be semantic, for example 0.3.1 or 0.3.1-rc.1." >&2
@@ -27,10 +26,11 @@ if gh release view "${VERSION}" >/dev/null 2>&1; then
   exit 1
 fi
 
-git show "${REF}:${PACKAGE_FILE}" | grep -F "${EXPECTED_ARTIFACT_PATH}" >/dev/null || {
-  echo "${PACKAGE_FILE} at ${REF} does not point at tokenizers-rust-${VERSION}." >&2
+pin_version="$(git show "${REF}:${PIN_FILE}" | jq -r '.version')"
+if [[ "${pin_version}" != "${VERSION}" ]]; then
+  echo "${PIN_FILE} at ${REF} pins ${pin_version}, not ${VERSION}." >&2
   exit 1
-}
+fi
 
 rust_release_url="$(gh release view "tokenizers-rust-${VERSION}" --json url --jq '.url')"
 
