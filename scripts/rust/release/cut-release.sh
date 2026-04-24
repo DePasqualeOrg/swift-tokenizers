@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 # Dispatch rust-release.yml for the current branch at HEAD, wait for the run
-# to finish, and verify the published release was built from the expected
-# commit.
+# to finish, verify the published release was built from the expected
+# commit, download the release manifest, write it verbatim to
+# rust/Pin.json, and commit the bump on the current branch.
 #
 # Intended to be run on a branch that already contains the Rust source and
 # workflow changes you want to publish, with a clean working tree pushed to
-# origin. For a normal PR flow this is a Rust-touching PR branch; for the
-# bootstrap 0.3.2 release under the new workflow this is main.
-#
-# A later change will extend this script to also download the manifest asset,
-# write rust/Pin.json, and commit the bump on the current branch. For now it
-# stops after publishing.
+# origin. For a normal PR flow this is a Rust-touching PR branch.
 
 set -euo pipefail
 
@@ -156,8 +152,53 @@ while true; do
       echo "Run: ${run_url}"
       echo "Release: ${release_url}"
       echo
-      echo "Note: rust/Pin.json update not yet automated. Extend cut-release.sh in a"
-      echo "following PR to download the manifest asset and commit the pin bump."
+
+      manifest_asset="TokenizersRust-${VERSION}.manifest.json"
+      pin_file="${REPO_ROOT}/rust/Pin.json"
+      tmp_manifest="$(mktemp)"
+      trap 'rm -f "${tmp_manifest}"' EXIT
+
+      echo "Downloading ${manifest_asset} for pin bump..."
+      gh release download "${TAG}" \
+        --pattern "${manifest_asset}" \
+        --output "${tmp_manifest}" \
+        --clobber
+
+      manifest_version="$(jq -r '.version' "${tmp_manifest}")"
+      manifest_commit="$(jq -r '.git_commit' "${tmp_manifest}")"
+
+      if [[ "${manifest_version}" != "${VERSION}" ]]; then
+        echo "Manifest version (${manifest_version}) does not match requested version (${VERSION})." >&2
+        exit 1
+      fi
+
+      if [[ "${manifest_commit}" != "${EXPECTED_COMMIT}" ]]; then
+        echo "Manifest git_commit (${manifest_commit}) does not match expected commit (${EXPECTED_COMMIT})." >&2
+        exit 1
+      fi
+
+      local_hash="$(bash "${REPO_ROOT}/scripts/rust/hash-source.sh")"
+      manifest_hash="$(jq -r '.source_hash_sha256' "${tmp_manifest}")"
+      if [[ "${local_hash}" != "${manifest_hash}" ]]; then
+        echo "Local source hash (${local_hash}) does not match manifest (${manifest_hash})." >&2
+        echo "Do not trust this release. Investigate before using the artifact." >&2
+        exit 1
+      fi
+
+      if [[ -f "${pin_file}" ]] && cmp -s "${tmp_manifest}" "${pin_file}"; then
+        echo "rust/Pin.json already matches the published manifest. Nothing to commit."
+        exit 0
+      fi
+
+      mv "${tmp_manifest}" "${pin_file}"
+      trap - EXIT
+
+      git add "${pin_file}"
+      git commit -m "Pin Rust XCFramework to tokenizers-rust-${VERSION}"
+
+      echo
+      echo "Committed rust/Pin.json bump to tokenizers-rust-${VERSION}."
+      echo "Push the branch and open or update the PR when ready."
       exit 0
     fi
 

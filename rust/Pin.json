@@ -1,0 +1,9 @@
+{
+  "hash_schema_version": 1,
+  "version": "0.3.2",
+  "git_commit": "6601a7ebce8070c489ce2506ae22d274f0fd698a",
+  "rust_toolchain": "1.94.1",
+  "source_hash_sha256": "968e9feabca899c74f9645aa0b771aef0bcf1d8d6121751e68e643ea02f6a21f",
+  "xcframework_url": "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.3.2/TokenizersRust-0.3.2.xcframework.zip",
+  "checksum": "a2625b247567efddbff61cb7daf2dd75496ea992cfac102e738f827cdcf3391b"
+}

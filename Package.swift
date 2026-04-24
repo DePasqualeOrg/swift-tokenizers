@@ -1,6 +1,44 @@
 // swift-tools-version: 6.1
 
+import Foundation
 import PackageDescription
+
+struct TokenizersRustPin: Decodable {
+    let hashSchemaVersion: Int
+    let xcframeworkURL: String
+    let checksum: String
+
+    enum CodingKeys: String, CodingKey {
+        case hashSchemaVersion = "hash_schema_version"
+        case xcframeworkURL = "xcframework_url"
+        case checksum
+    }
+}
+
+func loadTokenizersRustPin() -> TokenizersRustPin {
+    let supportedHashSchemaVersion = 1
+    let pinPath = "\(Context.packageDirectory)/rust/Pin.json"
+    let pinData: Data
+    do {
+        pinData = try Data(contentsOf: URL(fileURLWithPath: pinPath))
+    } catch {
+        fatalError("Failed to read \(pinPath): \(error). Run scripts/rust/release/cut-release.sh or restore the file from git.")
+    }
+
+    let pin: TokenizersRustPin
+    do {
+        pin = try JSONDecoder().decode(TokenizersRustPin.self, from: pinData)
+    } catch {
+        fatalError("Failed to decode \(pinPath): \(error). Expected keys hash_schema_version, xcframework_url, checksum.")
+    }
+
+    guard pin.hashSchemaVersion == supportedHashSchemaVersion else {
+        fatalError(
+            "Unsupported hash_schema_version \(pin.hashSchemaVersion) in \(pinPath); this Package.swift supports \(supportedHashSchemaVersion). Update Package.swift and Pin.json together."
+        )
+    }
+    return pin
+}
 
 let tokenizerCoreSources = [
     "BinaryDistinct.swift",
@@ -64,11 +102,14 @@ let tokenizersRustTarget: Target =
         // before publishing it as a remote binary artifact.
         .binaryTarget(name: "TokenizersRust", path: localRustArtifactPath)
     } else {
-        .binaryTarget(
-            name: "TokenizersRust",
-            url: "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.3.1/TokenizersRust-0.3.1.xcframework.zip",
-            checksum: "d25288b933b3aa164b661f8ff2b02a53c57c9b32a20dd1ac8a6c3429467f6fcd"
-        )
+        {
+            let pin = loadTokenizersRustPin()
+            return .binaryTarget(
+                name: "TokenizersRust",
+                url: pin.xcframeworkURL,
+                checksum: pin.checksum
+            )
+        }()
     }
 
 var packageTargets: [Target] = [
