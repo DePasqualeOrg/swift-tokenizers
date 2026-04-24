@@ -1,5 +1,5 @@
 use serde_json::Value as JsonValue;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::mem;
 use std::ptr;
 use std::slice;
@@ -210,10 +210,13 @@ pub extern "C" fn st_tokenizer_create_from_tokenizer_json(
         Err(error) => return failure(out_error, error),
     };
 
-    let runtime_configuration = match read_json_arg(runtime_configuration_json, "runtime_configuration_json")
-        .and_then(|value| {
-            serde_json::from_value(value).map_err(|err| CoreError::MismatchedConfig(err.to_string()))
-        }) {
+    let runtime_configuration = match read_json_arg(
+        runtime_configuration_json,
+        "runtime_configuration_json",
+    )
+    .and_then(|value| {
+        serde_json::from_value(value).map_err(|err| CoreError::MismatchedConfig(err.to_string()))
+    }) {
         Ok(runtime_configuration) => runtime_configuration,
         Err(error) => return failure(out_error, error),
     };
@@ -350,12 +353,18 @@ pub extern "C" fn st_tokenizer_decode(
     let token_ids = if len == 0 {
         &[]
     } else if token_ids.is_null() {
-        return failure(out_error, CoreError::Internal("token_ids was null".to_owned()));
+        return failure(
+            out_error,
+            CoreError::Internal("token_ids was null".to_owned()),
+        );
     } else {
         unsafe { slice::from_raw_parts(token_ids, len) }
     };
 
-    let decoded = match unsafe { &*handle }.core.decode(token_ids, skip_special_tokens) {
+    let decoded = match unsafe { &*handle }
+        .core
+        .decode(token_ids, skip_special_tokens)
+    {
         Ok(decoded) => decoded,
         Err(error) => return failure(out_error, error),
     };
@@ -420,7 +429,9 @@ pub extern "C" fn st_tokenizer_convert_id_to_token(
 
     unsafe {
         *out_found = maybe_token.is_some();
-        *out_token = maybe_token.map(string_to_buffer).unwrap_or_else(empty_buffer);
+        *out_token = maybe_token
+            .map(string_to_buffer)
+            .unwrap_or_else(empty_buffer);
     }
 
     true
@@ -484,12 +495,10 @@ pub extern "C" fn st_tokenizer_apply_chat_template(
         None
     };
 
-    let values = match unsafe { &*handle }.core.apply_chat_template(
-        &template,
-        context,
-        truncation,
-        max_length,
-    ) {
+    let values = match unsafe { &*handle }
+        .core
+        .apply_chat_template(&template, context, truncation, max_length)
+    {
         Ok(values) => values,
         Err(error) => return failure(out_error, error),
     };
@@ -565,8 +574,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn offline_fixture_directory() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../Tests/TokenizersTests/Resources")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/TokenizersTests/Resources")
     }
 
     #[test]
@@ -587,7 +595,12 @@ mod tests {
             &mut error,
         );
 
-        assert!(success, "ABI load failed with code {}: {}", error.code, string_to_buffer_lossy(&error.message));
+        assert!(
+            success,
+            "ABI load failed with code {}: {}",
+            error.code,
+            string_to_buffer_lossy(&error.message)
+        );
         assert!(!handle.is_null());
 
         st_free_owned_buffer(metadata);

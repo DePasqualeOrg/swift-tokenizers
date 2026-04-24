@@ -58,8 +58,6 @@ private enum RustFFI {
             return .missingConfig
         case 6:
             return .chatTemplate(message)
-        case 7:
-            return .missingChatTemplate
         case 9:
             return .mismatchedConfig(message)
         default:
@@ -77,7 +75,11 @@ package final class RustProxyModel: TokenizingModel, @unchecked Sendable {
     package let bosToken: String?
     package let eosToken: String?
     package let unknownToken: String?
-    package let fuseUnknownTokens: Bool
+    /// The `TokenizingModel` protocol requires this, but the Rust backend applies
+    /// unknown-token fusion inside the Rust library based on each model's own
+    /// `fuse_unk`/`fuse_unknown_tokens` config — Swift never needs to run it. Hardcoded
+    /// `false` so nothing on the Swift side tries to re-fuse already-fused output.
+    package let fuseUnknownTokens: Bool = false
     package let bosTokenId: Int?
     package let eosTokenId: Int?
     package let unknownTokenId: Int?
@@ -87,7 +89,6 @@ package final class RustProxyModel: TokenizingModel, @unchecked Sendable {
         bosToken = descriptor.runtimeConfiguration.bosToken
         eosToken = descriptor.runtimeConfiguration.eosToken
         unknownToken = descriptor.runtimeConfiguration.unknownToken
-        fuseUnknownTokens = descriptor.runtimeConfiguration.fuseUnknownTokens
         bosTokenId =
             descriptor.bosTokenId
             ?? bosToken.flatMap { try? RustTokenizerBackend.convertTokenToId(handle: handle, token: $0) }
@@ -364,28 +365,10 @@ package enum RustAutoTokenizerDirectoryLoader {
         return try decoder.decode(TokenizerRuntimeConfiguration.self, from: configurationData)
     }
 
-    private static func validateStrictCompatibility(
-        runtimeConfiguration: TokenizerRuntimeConfiguration,
-        strict: Bool
-    ) throws {
-        // Unlike the Swift backend, Rust does not dispatch through a local `tokenizer_class`
-        // registry. It validates the transformers-side name in strict mode to preserve the public
-        // contract, then loads `tokenizer.json` through upstream `huggingface/tokenizers` and adds
-        // only the compatibility behavior we explicitly need.
-        _ = try TokenizerCompatibility.validateResolvedTokenizerName(
-            tokenizerClass: runtimeConfiguration.tokenizerClass,
-            modelType: runtimeConfiguration.modelType,
-            strict: strict,
-            isSupported: TokenizerCompatibility.isRustSupportedTokenizer(named:)
-        )
-    }
-
     package static func loadTokenizerCore(
         from directory: URL,
-        runtimeConfiguration: TokenizerRuntimeConfiguration,
-        strict: Bool
+        runtimeConfiguration: TokenizerRuntimeConfiguration
     ) async throws -> any Tokenizer {
-        try validateStrictCompatibility(runtimeConfiguration: runtimeConfiguration, strict: strict)
         let runtimeConfigurationJSON = try encodeRuntimeConfiguration(runtimeConfiguration)
 
         var handle: OpaquePointer?
@@ -411,10 +394,7 @@ package enum RustAutoTokenizerDirectoryLoader {
         return try makeTokenizer(handle: handle, metadataData: RustFFI.takeData(from: metadataBuffer))
     }
 
-    package static func load(from directory: URL, strict: Bool) async throws -> any Tokenizer {
-        let runtimeConfiguration = try loadRuntimeConfiguration(from: directory)
-        try validateStrictCompatibility(runtimeConfiguration: runtimeConfiguration, strict: strict)
-
+    package static func load(from directory: URL) async throws -> any Tokenizer {
         var handle: OpaquePointer?
         var metadataBuffer = RustFFI.emptyBuffer()
         var error = RustFFI.emptyError()

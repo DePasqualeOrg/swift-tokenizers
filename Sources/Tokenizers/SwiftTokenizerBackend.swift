@@ -6,146 +6,167 @@ import Foundation
 import Jinja
 import TokenizersCore
 
-private struct TokenizerTypeBox<Value>: @unchecked Sendable {
-    let type: Value
-}
-
-private final class RegisteredTokenizerStore: @unchecked Sendable {
-    private var registeredTokenizers: [String: TokenizerTypeBox<PreTrainedTokenizerModel.Type>] = [:]
-    private let lock = NSLock()
-
-    func register(_ tokenizerClass: PreTrainedTokenizerModel.Type, for name: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        registeredTokenizers[name] = TokenizerTypeBox(type: tokenizerClass)
-    }
-
-    func tokenizerClass(
-        for name: String,
-        fallback: [String: TokenizerTypeBox<PreTrainedTokenizerModel.Type>]
-    ) -> PreTrainedTokenizerModel.Type? {
-        lock.lock()
-        defer { lock.unlock() }
-        return registeredTokenizers[name]?.type ?? fallback[name]?.type
-    }
-}
-
 package enum TokenizerModel {
-    private static let registeredTokenizers = RegisteredTokenizerStore()
-
-    package static func registerTokenizer(_ tokenizerClass: PreTrainedTokenizerModel.Type, for name: String) {
-        registeredTokenizers.register(tokenizerClass, for: name)
-    }
-
-    package static func tokenizerClass(for name: String) -> PreTrainedTokenizerModel.Type? {
-        registeredTokenizers.tokenizerClass(for: name, fallback: knownTokenizers)
-    }
-
-    private static let knownTokenizers: [String: TokenizerTypeBox<PreTrainedTokenizerModel.Type>] = [
-        "BertTokenizer": TokenizerTypeBox(type: BertTokenizer.self),
-        "CodeGenTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "CodeLlamaTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "CohereTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "DistilbertTokenizer": TokenizerTypeBox(type: BertTokenizer.self),
-        "DistilBertTokenizer": TokenizerTypeBox(type: BertTokenizer.self),
-        "FalconTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "GemmaTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "GPT2Tokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "GPTNeoXTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "InternLM2Tokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "LlamaTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "PreTrainedTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "Qwen2Tokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "Qwen3Tokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "RobertaTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "T5Tokenizer": TokenizerTypeBox(type: T5Tokenizer.self),
-        "TokenizersBackend": TokenizerTypeBox(type: BPETokenizer.self),
-        "WhisperTokenizer": TokenizerTypeBox(type: BPETokenizer.self),
-        "XLMRobertaTokenizer": TokenizerTypeBox(type: UnigramTokenizer.self),
-        "Xlm-RobertaTokenizer": TokenizerTypeBox(type: UnigramTokenizer.self),
-    ]
-
-    package static func unknownToken(from tokenizerConfig: Config) -> String? {
-        tokenizerConfig.unkToken.content.string() ?? tokenizerConfig.unkToken.string()
-    }
-
     package static func from(
         tokenizerConfig: Config,
         tokenizerData: Config,
         addedTokens: [String: Int],
         tokenizerVocab: TokenizerVocab?,
-        tokenizerMerges: TokenizerMerges?,
-        strict: Bool = true
+        tokenizerMerges: TokenizerMerges?
     ) async throws -> any TokenizingModel {
-        let tokenizerName = try TokenizerCompatibility.validateResolvedTokenizerName(
-            tokenizerClass: tokenizerConfig.tokenizerClass.string(),
-            modelType: tokenizerConfig.modelType.string(),
-            strict: strict
-        ) { tokenizerName in
-            TokenizerModel.tokenizerClass(for: tokenizerName) != nil
-        }
-        let tokenizerClass = TokenizerModel.tokenizerClass(for: tokenizerName) ?? BPETokenizer.self
-        if TokenizerModel.tokenizerClass(for: tokenizerName) == nil {
-            if strict {
-                throw TokenizerError.unsupportedTokenizer(tokenizerName)
-            } else {
-                // This fallback keeps the Swift path usable for transformers-side wrapper names that
-                // we have not registered locally. The underlying tokenizer engine may still just be
-                // BPE/Unigram/etc. even when Python exposes a model-specific class like
-                // `NllbTokenizer`.
-                print(
-                    "Warning: Tokenizer model class \(tokenizerName) is not registered, falling back to a standard BPE implementation."
+        // Select the model implementation from `tokenizer.json`'s `model.type`,
+        // matching upstream's tagged enum in `tokenizers/src/models/mod.rs`
+        // (`ModelWrapper`). When `type` is absent, fall back to shape-based
+        // detection — the "legacy untagged" path in `ModelWrapper`'s custom
+        // `Deserialize` impl. Widely-used models like `bert-base-uncased` ship
+        // tokenizer.json without `model.type`, so strict rejection isn't viable;
+        // empty / unknown values still throw.
+        let rawModelType =
+            tokenizerData["model"]["type"].string()
+            ?? inferLegacyModelType(
+                from: tokenizerData,
+                extractedMerges: tokenizerMerges
+            )
+
+        switch rawModelType {
+        case "BPE":
+            if case .bpe(let rawVocab) = tokenizerVocab,
+                let rawMerges = tokenizerMerges?.rules
+            {
+                return await BPETokenizer.create(
+                    tokenizerConfig: tokenizerConfig,
+                    rawVocab: rawVocab,
+                    rawMerges: rawMerges,
+                    addedTokens: addedTokens,
+                    unknownToken: tokenizerData.model["unkToken"].string(),
+                    fuseUnknownTokens: tokenizerData.model["fuseUnk"].boolean(or: false),
+                    byteFallback: tokenizerData.model["byteFallback"].boolean(or: false)
                 )
             }
-        }
-
-        if tokenizerClass is BPETokenizer.Type,
-            case .bpe(let rawVocab) = tokenizerVocab,
-            let rawMerges = tokenizerMerges?.rules
-        {
-            return await BPETokenizer.create(
-                tokenizerConfig: tokenizerConfig,
-                rawVocab: rawVocab,
-                rawMerges: rawMerges,
-                addedTokens: addedTokens
-            )
-        }
-
-        if tokenizerClass is UnigramTokenizer.Type,
-            case .unigram(let rawVocabArray) = tokenizerVocab,
-            let rawVocab = rawVocabArray as? [[Any]]
-        {
-            return try await UnigramTokenizer.create(
+            return try BPETokenizer(
                 tokenizerConfig: tokenizerConfig,
                 tokenizerData: tokenizerData,
-                rawVocab: rawVocab,
-                addedTokens: addedTokens
+                addedTokens: addedTokens,
+                vocab: tokenizerVocab,
+                merges: tokenizerMerges
             )
-        }
 
-        return try tokenizerClass.init(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: tokenizerData,
-            addedTokens: addedTokens,
-            vocab: tokenizerVocab,
-            merges: tokenizerMerges
-        )
+        case "WordPiece":
+            return try WordPieceTokenizer(
+                tokenizerConfig: tokenizerConfig,
+                tokenizerData: tokenizerData,
+                addedTokens: addedTokens,
+                vocab: tokenizerVocab,
+                merges: tokenizerMerges
+            )
+
+        case "Unigram":
+            if case .unigram(let rawVocabArray) = tokenizerVocab,
+                let rawVocab = rawVocabArray as? [[Any]]
+            {
+                return try await UnigramTokenizer.create(
+                    tokenizerConfig: tokenizerConfig,
+                    tokenizerData: tokenizerData,
+                    rawVocab: rawVocab,
+                    addedTokens: addedTokens
+                )
+            }
+            return try UnigramTokenizer(
+                tokenizerConfig: tokenizerConfig,
+                tokenizerData: tokenizerData,
+                addedTokens: addedTokens,
+                vocab: tokenizerVocab,
+                merges: tokenizerMerges
+            )
+
+        case "WordLevel":
+            return try WordLevelTokenizer(
+                tokenizerConfig: tokenizerConfig,
+                tokenizerData: tokenizerData,
+                addedTokens: addedTokens,
+                vocab: tokenizerVocab,
+                merges: tokenizerMerges
+            )
+
+        default:
+            throw TokenizerError.unsupportedModelType(rawModelType ?? "")
+        }
     }
 }
 
+/// Shape-based fallback matching the order upstream's `ModelWrapper` uses when the
+/// `type` tag is missing (see the custom `Deserialize` impl in
+/// `tokenizers/src/models/mod.rs`): BPE first, then WordPiece, WordLevel, Unigram.
+/// Returns `nil` if the shape matches none.
+private func inferLegacyModelType(
+    from tokenizerData: Config,
+    extractedMerges: TokenizerMerges?
+) -> String? {
+    let model = tokenizerData["model"]
+    // BPE: presence of `merges`. Upstream's `ModelWrapper::Deserialize` untagged
+    // fallback attempts BPE first, so we match that priority.
+    if extractedMerges != nil || model["merges"].array() != nil {
+        return "BPE"
+    }
+    // WordPiece is distinguished from WordLevel by fields that only WordPiece has.
+    if model["continuing_subword_prefix"].string() != nil
+        || model["max_input_chars_per_word"].integer() != nil
+    {
+        return "WordPiece"
+    }
+    // Vocab shape decides the remaining two: array ⇒ Unigram, dict ⇒ WordLevel.
+    if model["vocab"].array() != nil {
+        return "Unigram"
+    }
+    if model["vocab"].dictionary() != nil {
+        return "WordLevel"
+    }
+    return nil
+}
+
 package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Sendable {
+    /// Behavior flags for an entry in `tokenizer.json`'s `added_tokens` array. Mirrors
+    /// `AddedToken` in `tokenizers/src/tokenizer/added_vocabulary.rs`.
+    private struct AddedTokenInfo: Sendable {
+        let content: String
+        let id: Int
+        let lstrip: Bool
+        let rstrip: Bool
+        let singleWord: Bool
+        let normalized: Bool
+    }
+
+    /// Alias for `PostProcessorToken` within the backend. Upstream Rust tracks
+    /// added-token matches as `Token { id, value, offsets }` so the widened
+    /// match slice (e.g. `" <mask>"` when `lstrip`/`rstrip` are set) flows
+    /// through post-processing as the token string while still encoding to the
+    /// added-token's ID. `PostProcessorToken` carries that pair positionally,
+    /// so the override survives the post-processor even when another position
+    /// in the same sequence produces an identical value via model tokenization.
+    private typealias CoreToken = PostProcessorToken
+
     package let model: any TokenizingModel
     package let specialTokens: [String: Int]
     package let performsCleanup = true
 
     private let addedTokens: Set<String>
-    private let addedTokensRegex: NSRegularExpression?
+    /// Phase-1 lookup: raw matched text → original added token info. Keys are the raw
+    /// token contents since phase-1 runs before normalization.
+    private let nonNormalizedAddedInfo: [String: AddedTokenInfo]
+    /// Phase-2 lookup: normalized matched text → original added token info. Keys are
+    /// the *normalized* form of each token's content, matching upstream's
+    /// `AddedVocabulary::refresh_added_tokens`, which populates `normalized_cache`
+    /// by running the tokenizer's normalizer over each token's content. The
+    /// `AddedTokenInfo.content` value in this dict is still the original
+    /// (pre-normalization) string, so emitted tokens carry the vocab-key form.
+    private let normalizedAddedInfo: [String: AddedTokenInfo]
+    private let nonNormalizedAddedRegex: NSRegularExpression?
+    private let normalizedAddedRegex: NSRegularExpression?
     private let preTokenizer: PreTokenizer?
     private let normalizer: Normalizer?
     private let postProcessor: PostProcessor?
     private let decoder: Decoder?
     private let cleanUpTokenizationSpaces: Bool
-    private let fuseUnknownTokens: Bool
 
     private var templateCache = [String: Template]()
     private let templateCacheLock = NSLock()
@@ -165,7 +186,6 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
     }
 
     package init(
-        tokenizerConfig: Config,
         tokenizerData: Config,
         model: any TokenizingModel,
         runtimeConfiguration: TokenizerRuntimeConfiguration
@@ -174,32 +194,193 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
         let parsed = Self.parseAddedTokens(from: tokenizerData)
         self.specialTokens = parsed.special
         self.addedTokens = Set(parsed.tokens.keys)
-        self.fuseUnknownTokens = model.fuseUnknownTokens
         self.cleanUpTokenizationSpaces = runtimeConfiguration.cleanUpTokenizationSpaces
 
-        let unwrappedAddedTokens: [(content: String, prefix: Bool, suffix: Bool)] = tokenizerData["addedTokens"]
+        let addedTokenInfo: [AddedTokenInfo] = tokenizerData["addedTokens"]
             .array(or: [])
-            .compactMap { addedToken -> (String, Bool, Bool)? in
+            .compactMap { addedToken -> AddedTokenInfo? in
                 guard let content = addedToken.content.string() else { return nil }
-                let prefix = addedToken["lstrip"].boolean(or: false)
-                let suffix = addedToken["rstrip"].boolean(or: false)
-                return (content, prefix, suffix)
+                guard let id = addedToken["id"].integer() else { return nil }
+                let special = addedToken["special"].boolean(or: false)
+                return AddedTokenInfo(
+                    content: content,
+                    id: id,
+                    lstrip: addedToken["lstrip"].boolean(or: false),
+                    rstrip: addedToken["rstrip"].boolean(or: false),
+                    // Config's subscript normalizes camelCase → snake_case, so
+                    // `addedToken["singleWord"]` reads `tokenizer.json`'s `single_word`.
+                    singleWord: addedToken["singleWord"].boolean(or: false),
+                    // Upstream default: `normalized` is `!special` when not explicitly set.
+                    normalized: addedToken["normalized"].boolean() ?? !special
+                )
             }
             .sorted { $0.content.count > $1.content.count }
 
-        let addedTokensRegexString = unwrappedAddedTokens.map {
-            let token = NSRegularExpression.escapedPattern(for: $0.content)
-            let prefix = $0.prefix ? #"\s*"# : ""
-            let suffix = $0.suffix ? #"\s*"# : ""
-            return "\(prefix)(\(token))\(suffix)"
-        }.joined(separator: "|")
-        addedTokensRegex = try? NSRegularExpression(pattern: addedTokensRegexString, options: [])
+        let resolvedPreTokenizer = try PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
+        let resolvedNormalizer = try NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
+        let resolvedPostProcessor = try PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
+        let resolvedDecoder = try DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: self.addedTokens)
 
-        preTokenizer = try PreTokenizerFactory.fromConfig(config: tokenizerData["preTokenizer"])
-        normalizer = try NormalizerFactory.fromConfig(config: tokenizerData["normalizer"])
-        postProcessor = try PostProcessorFactory.fromConfig(config: tokenizerData["postProcessor"])
-        decoder = try DecoderFactory.fromConfig(config: tokenizerData["decoder"], addedTokens: self.addedTokens)
-        _ = tokenizerConfig
+        preTokenizer = resolvedPreTokenizer
+        normalizer = resolvedNormalizer
+        postProcessor = resolvedPostProcessor
+        decoder = resolvedDecoder
+
+        // Phase-1 matches non-normalized tokens against raw input. Pattern keys are
+        // the raw contents and map directly to each info.
+        let nonNormalizedInfos = addedTokenInfo.filter { !$0.normalized }
+        self.nonNormalizedAddedInfo = Dictionary(
+            nonNormalizedInfos.map { ($0.content, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        self.nonNormalizedAddedRegex = Self.buildAddedTokensRegex(
+            patternsWithFlags: nonNormalizedInfos.map {
+                (pattern: $0.content, lstrip: $0.lstrip, rstrip: $0.rstrip)
+            }
+        )
+
+        // Phase-2 matches normalized tokens against normalized input. Build the
+        // pattern from each token's *normalized* content and key the lookup dict
+        // by the same normalized form, mirroring upstream's `normalized_cache`.
+        // Sort again after normalization because normalization can change length
+        // and length-descending ordering is what makes the `|`-alternation match
+        // the longest candidate at each position.
+        let normalizedInfos = addedTokenInfo.filter { $0.normalized }
+        let normalizedPairs: [(normalizedContent: String, info: AddedTokenInfo)] =
+            normalizedInfos
+            .map { info in
+                let normalized = resolvedNormalizer.map { $0(text: info.content) } ?? info.content
+                return (normalized, info)
+            }
+            .sorted { $0.normalizedContent.count > $1.normalizedContent.count }
+        self.normalizedAddedInfo = Dictionary(
+            normalizedPairs.map { ($0.normalizedContent, $0.info) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        self.normalizedAddedRegex = Self.buildAddedTokensRegex(
+            patternsWithFlags: normalizedPairs.map {
+                (pattern: $0.normalizedContent, lstrip: $0.info.lstrip, rstrip: $0.info.rstrip)
+            }
+        )
+    }
+
+    private static func buildAddedTokensRegex(
+        patternsWithFlags: [(pattern: String, lstrip: Bool, rstrip: Bool)]
+    ) -> NSRegularExpression? {
+        guard !patternsWithFlags.isEmpty else { return nil }
+        let pattern = patternsWithFlags.map { entry in
+            let escaped = NSRegularExpression.escapedPattern(for: entry.pattern)
+            let prefix = entry.lstrip ? #"\s*"# : ""
+            let suffix = entry.rstrip ? #"\s*"# : ""
+            return "\(prefix)(\(escaped))\(suffix)"
+        }.joined(separator: "|")
+        return try? NSRegularExpression(pattern: pattern, options: [])
+    }
+
+    /// Unicode-aware word-character check matching the Rust `regex` crate's default
+    /// `\w`, used by upstream `AddedVocabulary`'s `single_word` boundary regex
+    /// (`tokenizers/src/tokenizer/added_vocabulary.rs`). The Rust crate's `\w` is
+    /// `\p{word}` = `\p{L} ∪ \p{N} ∪ \p{M} ∪ \p{Pc}`. `CharacterSet.alphanumerics`
+    /// covers only `\p{L} ∪ \p{N}`, so combining marks and connector punctuation
+    /// need explicit checks; `_` is already included in `\p{Pc}`.
+    private static func isWordChar(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter,
+            .modifierLetter, .otherLetter:
+            return true
+        case .decimalNumber, .letterNumber, .otherNumber:
+            return true
+        case .nonspacingMark, .spacingMark, .enclosingMark:
+            return true
+        case .connectorPunctuation:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func findAddedTokenMatches(
+        in text: String,
+        regex: NSRegularExpression?,
+        infoByMatchedContent: [String: AddedTokenInfo]
+    ) -> [(outer: NSRange, value: String, id: Int)] {
+        guard let regex else { return [] }
+        let ns = text as NSString
+        let fullRange = NSRange(location: 0, length: ns.length)
+        var results: [(NSRange, String, Int)] = []
+        let scalars = text.unicodeScalars
+        for match in regex.matches(in: text, options: [], range: fullRange) {
+            var captured: NSRange?
+            for groupIndex in 1..<match.numberOfRanges {
+                let range = match.range(at: groupIndex)
+                if range.location != NSNotFound {
+                    captured = range
+                    break
+                }
+            }
+            guard let captured else { continue }
+            let matchedContent = ns.substring(with: captured)
+            guard let info = infoByMatchedContent[matchedContent] else { continue }
+
+            if info.singleWord {
+                // Upstream checks `single_word` against the raw content bounds from the
+                // Aho-Corasick matcher, *before* extending for lstrip / rstrip. See
+                // `AddedVocabulary::find_matches` in upstream's `added_vocabulary.rs`:
+                // the regex uses `start` / `stop` (the content bounds) for the
+                // surrounding-word check, then separately widens `start` / `stop` for
+                // lstrip / rstrip. We mirror that by reading the captured (inner)
+                // group's NSRange rather than `match.range` (which may include
+                // consumed whitespace from `\s*` bookends). Using the outer range
+                // would reject `<mask>` in `"a <mask>"` because `a` is a word
+                // character immediately before the consumed leading space.
+                guard let contentRange = Range(captured, in: text) else { continue }
+                let leftOK: Bool
+                if contentRange.lowerBound == text.startIndex {
+                    leftOK = true
+                } else {
+                    let before = scalars.index(before: contentRange.lowerBound)
+                    leftOK = !Self.isWordChar(scalars[before])
+                }
+                let rightOK: Bool
+                if contentRange.upperBound == text.endIndex {
+                    rightOK = true
+                } else {
+                    rightOK = !Self.isWordChar(scalars[contentRange.upperBound])
+                }
+                guard leftOK && rightOK else { continue }
+            }
+
+            // Emit the outer (widened) slice as the token value, matching upstream
+            // `AddedVocabulary::split_with_indices` (`added_vocabulary.rs`) which
+            // stores `slice.get().to_owned()` — the lstrip/rstrip-widened text in
+            // phase 1 and the normalized-input slice in phase 2 — as the Token's
+            // value. The paired `id` keeps the added-token association so `encode`
+            // resolves the correct ID even though the value is not a vocab key.
+            results.append((match.range, ns.substring(with: match.range), info.id))
+        }
+        return results
+    }
+
+    private func splitByMatches(
+        _ text: String,
+        matches: [(outer: NSRange, value: String, id: Int)]
+    ) -> [(value: String, idOverride: Int?)] {
+        let ns = text as NSString
+        var sections: [(String, Int?)] = []
+        var cursor = 0
+        for (outer, value, id) in matches {
+            if cursor < outer.location {
+                let sliceRange = NSRange(location: cursor, length: outer.location - cursor)
+                sections.append((ns.substring(with: sliceRange), nil))
+            }
+            sections.append((value, id))
+            cursor = outer.location + outer.length
+        }
+        if cursor < ns.length {
+            let sliceRange = NSRange(location: cursor, length: ns.length - cursor)
+            sections.append((ns.substring(with: sliceRange), nil))
+        }
+        return sections
     }
 
     private func compiledTemplate(for templateString: String) throws -> Template {
@@ -236,6 +417,17 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
         return postProcessor(tokens: tokens, addSpecialTokens: addSpecialTokens)
     }
 
+    /// Id-aware post-processing: preserves `idOverride` on passthrough tokens
+    /// positionally, so added-token matches still encode to their added-token
+    /// id even when the widened value isn't a vocab key. Built-in
+    /// post-processors override the `[PostProcessorToken]` requirement to
+    /// forward overrides; the default extension delegates to the `[String]`
+    /// method and drops overrides for any user-supplied conformer.
+    private func postProcess(_ tokens: [CoreToken], addSpecialTokens: Bool) -> [CoreToken] {
+        guard let postProcessor else { return tokens }
+        return postProcessor(tokens: tokens, addSpecialTokens: addSpecialTokens)
+    }
+
     private func decodeTokens(_ tokens: [String]) -> [String] {
         guard let tokenDecoder = decoder else { return tokens }
         return tokenDecoder(tokens: tokens)
@@ -258,44 +450,75 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
             .replacingOccurrences(of: " 're", with: "'re")
     }
 
-    private func fuseUnknown(_ tokens: [String]) -> [String] {
-        guard fuseUnknownTokens else { return tokens }
-        let (fused, _) = tokens.reduce((fused: [String](), previousIsUnknown: false)) { result, token in
-            var (fused, previousIsUnknown) = result
-            let isUnknown = model.convertTokenToId(token) == model.unknownTokenId
-            if isUnknown {
-                if !previousIsUnknown {
-                    fused.append(token)
-                }
-            } else {
-                fused.append(token)
+    /// The pre-post-processor tokenization: added-tokens matching, pre-tokenization,
+    /// model step, and unknown fusion. `tokenize(text:)` and `encode(text:addSpecialTokens:)`
+    /// both call this and then decide whether to run the post-processor (and with
+    /// which `addSpecialTokens` setting).
+    private func tokenizeCore(text: String) -> [CoreToken] {
+        // Two-pass matcher over `added_tokens`, matching upstream
+        // `tokenizers/src/tokenizer/added_vocabulary.rs`:
+        //   pass 1 — `normalized: false` tokens matched against raw input
+        //   pass 2 — `normalized: true` tokens matched against normalized input
+        // Each pass filters `single_word` matches using the content-only bounds
+        // (the regex's inner capture group), not the outer match range that may
+        // include whitespace consumed by lstrip/rstrip.
+        var sections: [[CoreToken]] = []
+        var isFirstSection = true
+
+        let phase1Matches = findAddedTokenMatches(
+            in: text,
+            regex: nonNormalizedAddedRegex,
+            infoByMatchedContent: nonNormalizedAddedInfo
+        )
+        for phase1 in splitByMatches(text, matches: phase1Matches) {
+            if let phase1Id = phase1.idOverride {
+                sections.append([CoreToken(value: phase1.value, idOverride: phase1Id)])
+                isFirstSection = false
+                continue
             }
-            return (fused, isUnknown)
+
+            let normalized = normalize(phase1.value)
+            let phase2Matches = findAddedTokenMatches(
+                in: normalized,
+                regex: normalizedAddedRegex,
+                infoByMatchedContent: normalizedAddedInfo
+            )
+            for phase2 in splitByMatches(normalized, matches: phase2Matches) {
+                if let phase2Id = phase2.idOverride {
+                    sections.append([CoreToken(value: phase2.value, idOverride: phase2Id)])
+                    isFirstSection = false
+                    continue
+                }
+                let pre = preTokenize(
+                    phase2.value,
+                    options: isFirstSection ? [.firstSection] : []
+                )
+                sections.append(pre.flatMap { model($0).map { CoreToken(value: $0, idOverride: nil) } })
+                isFirstSection = false
+            }
         }
-        return fused
+
+        return sections.flatMap { $0 }
     }
 
+    /// Runs the full tokenization pipeline (including the post-processor with
+    /// specials suppressed), matching Python transformers v5's `TokenizersBackend.tokenize`
+    /// in `src/transformers/tokenization_utils_tokenizers.py`:
+    ///
+    ///     def tokenize(self, text, pair=None, add_special_tokens=False, **kwargs):
+    ///         return self._encode_plus(text=text, text_pair=pair,
+    ///                                  add_special_tokens=add_special_tokens, ...).tokens()
+    ///
+    /// and the Rust backend's `tokenizer.encode(text, false)` call. The post-processor
+    /// runs because non-special transformations (e.g. Roberta's offset trimming) apply
+    /// regardless of the `addSpecialTokens` flag.
     package func tokenize(text: String) -> [String] {
-        let sections: [String] =
-            if let regex = addedTokensRegex {
-                text.split(by: regex)
-            } else {
-                [text]
-            }
-
-        return sections.enumerated().map { section, text in
-            if addedTokens.contains(text) {
-                return [text]
-            }
-            return preTokenize(normalize(text), options: section == 0 ? [.firstSection] : [])
-                .flatMap { model($0) }
-        }
-        .flatMap { fuseUnknown($0) }
+        postProcess(tokenizeCore(text: text), addSpecialTokens: false).map { $0.value }
     }
 
     package func encode(text: String, addSpecialTokens: Bool) -> [Int] {
-        postProcess(tokenize(text: text), addSpecialTokens: addSpecialTokens).map {
-            model.convertTokenToId($0)!
+        postProcess(tokenizeCore(text: text), addSpecialTokens: addSpecialTokens).map { token in
+            token.idOverride ?? model.convertTokenToId(token.value)!
         }
     }
 
@@ -311,8 +534,13 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
             tokenStrings = tokenIds.compactMap { model.convertIdToToken($0) }
         }
 
-        let decoded = decodeTokens(tokenStrings)
-        return cleanUp(text: decoded.joined(separator: ""))
+        // Upstream (`tokenizers/src/tokenizer/mod.rs`) joins raw tokens with a space when
+        // no decoder is configured. When a decoder ran, its output is already text parts
+        // (e.g. ByteLevel resolves byte-encoded whitespace) and should be concatenated
+        // without adding a separator.
+        let separator = decoder == nil ? " " : ""
+        let decoded = decodeTokens(tokenStrings).joined(separator: separator)
+        return cleanUp(text: decoded)
     }
 
     package func renderChatTemplate(template: String, contextObject: [String: Any]) throws -> String {
@@ -339,140 +567,9 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
     }
 }
 
-private final class LlamaSwiftTokenizerBackend: SwiftTokenizerBackend, @unchecked Sendable {
-    private static let sentencePieceUnderline = "▁"
-
-    private let isLegacy: Bool
-
-    init(
-        tokenizerConfig: Config,
-        tokenizerData: Config,
-        model: any TokenizingModel,
-        runtimeConfiguration: TokenizerRuntimeConfiguration,
-        isLegacy: Bool
-    ) throws {
-        self.isLegacy = isLegacy
-        try super.init(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: tokenizerData,
-            model: model,
-            runtimeConfiguration: runtimeConfiguration
-        )
-    }
-
-    override package func tokenize(text: String) -> [String] {
-        if isLegacy || text.isEmpty {
-            return super.tokenize(text: text)
-        }
-
-        let tokens = super.tokenize(
-            text: Self.sentencePieceUnderline + text.replacingOccurrences(of: Self.sentencePieceUnderline, with: " ")
-        )
-        if tokens.first == Self.sentencePieceUnderline,
-            let second = tokens.dropFirst().first,
-            specialTokens[second] != nil
-        {
-            return Array(tokens[1...])
-        }
-        return tokens
-    }
-}
-
-private enum LlamaTokenizerConfig {
-    private static let sentencePieceUnderline = "▁"
-
-    private static func updatedPostProcessorConfig(
-        tokenizerConfig: Config,
-        processorConfig: Config?
-    ) throws -> Config? {
-        // Keep the Swift Llama compatibility path aligned with Python transformers:
-        // `TokenizersBackend.update_post_processor` in `tokenization_utils_tokenizers.py`
-        // rebuilds `TemplateProcessing` from `add_bos_token` / `add_eos_token` for
-        // Llama-family fast tokenizers instead of trusting the raw tokenizer JSON.
-        let postProcessor = try PostProcessorFactory.fromConfig(config: processorConfig)
-        guard !(postProcessor is TemplateProcessing) else { return nil }
-
-        let addBosToken = tokenizerConfig.addBosToken.boolean(or: false)
-        let bosToken = tokenizerConfig.bosToken.tokenString
-        if addBosToken, bosToken == nil {
-            throw TokenizerError.mismatchedConfig("add_bos_token is True but bos_token is nil")
-        }
-
-        let addEosToken = tokenizerConfig.addEosToken.boolean(or: false)
-        let eosToken = tokenizerConfig.eosToken.tokenString
-        if addEosToken, eosToken == nil {
-            throw TokenizerError.mismatchedConfig("add_eos_token is True but eos_token is nil")
-        }
-
-        var single: [[String: Any]] = []
-        if addBosToken {
-            single += [["SpecialToken": ["id": bosToken!, "type_id": 0]]]
-        }
-        single += [["Sequence": ["id": "A", "type_id": 0]]]
-        if addEosToken {
-            single += [["SpecialToken": ["id": eosToken!, "type_id": 0]]]
-        }
-
-        var pair = single
-        if addBosToken {
-            pair += [["SpecialToken": ["id": bosToken!, "type_id": 1]]]
-        }
-        pair += [["Sequence": ["id": "B", "type_id": 1]]]
-        if addEosToken {
-            pair += [["SpecialToken": ["id": eosToken!, "type_id": 1]]]
-        }
-
-        return Config([
-            "type": PostProcessorType.TemplateProcessing.rawValue,
-            "single": single,
-            "pair": pair,
-        ])
-    }
-
-    static func buildUpdatedConfig(
-        tokenizerConfig: Config,
-        tokenizerData: Config,
-        isLegacy: Bool
-    ) throws -> Config {
-        var configDictionary = tokenizerData.dictionary(or: [:])
-        if !isLegacy {
-            // Python `models/llama/tokenization_llama.py` swaps Llama fast tokenizers to
-            // a `Metaspace` pre-tokenizer that uses `_get_prepend_scheme(...)` for the
-            // non-legacy path. Keep the Swift backend aligned with that behavior.
-            _ = configDictionary.removeValue(forKey: "normalizer")
-            configDictionary["pre_tokenizer"] = [
-                "type": "Metaspace",
-                "replacement": .init(sentencePieceUnderline),
-                "add_prefix_space": true,
-                "prepend_scheme": "first",
-            ]
-        }
-
-        if let postProcessorConfig = try updatedPostProcessorConfig(
-            tokenizerConfig: tokenizerConfig,
-            processorConfig: tokenizerData["postProcessor"]
-        ) {
-            configDictionary["post_processor"] = .init(postProcessorConfig.dictionary(or: [:]))
-        }
-
-        return Config(configDictionary)
-    }
-}
-
 package enum AutoTokenizerDirectorySidecars {
     static func load(from directory: URL) throws -> Config {
         var tokenizerConfig = loadOptionalConfig(from: directory.appending(path: "tokenizer_config.json"))
-
-        if tokenizerConfig.tokenizerClass.string() == nil {
-            let modelConfig = loadOptionalConfig(from: directory.appending(path: "config.json"))
-            let resolvedClass = TokenizerCompatibility.resolvedTokenizerClass(
-                tokenizerClass: modelConfig.tokenizerClass.string(),
-                modelType: modelConfig.modelType.string()
-            )
-            if let resolvedClass {
-                tokenizerConfig = merging(tokenizerConfig, key: "tokenizer_class", value: Config(resolvedClass))
-            }
-        }
 
         if let chatTemplate = loadChatTemplateOverride(from: directory) {
             tokenizerConfig = merging(tokenizerConfig, key: "chat_template", value: chatTemplate)
@@ -548,17 +645,38 @@ package enum SwiftAutoTokenizerDirectoryLoader {
             let model = modelDict.mutableCopy() as! NSMutableDictionary
             let modelType = model["type"] as? String
 
-            if modelType == "BPE", let vocab = model["vocab"] as? NSDictionary {
+            // Shape-based inference for untagged `tokenizer.json` files uses the
+            // same priority as upstream `ModelWrapper`'s custom `Deserialize` impl
+            // in `tokenizers/src/models/mod.rs`: BPE (merges present), then Unigram
+            // (vocab is an array). WordPiece / WordLevel go through the slow path.
+            // When inference resolves a type, stamp it into `model.type` so the
+            // model-selection switch in `TokenizerModel.from` sees it without
+            // needing to re-read the vocab (which we strip below to avoid
+            // duplicate parsing).
+            let hasMerges = model["merges"] is [Any]
+            let vocabIsArray = model["vocab"] is NSArray
+
+            let isBPE = modelType == "BPE" || (modelType == nil && hasMerges)
+            let isUnigram =
+                modelType == "Unigram" || (modelType == nil && !hasMerges && vocabIsArray)
+
+            if isBPE, let vocab = model["vocab"] as? NSDictionary {
                 tokenizerVocab = .bpe(vocab)
                 if let merges = model["merges"] as? [Any] {
                     tokenizerMerges = TokenizerMerges(merges)
                 }
                 model.removeObject(forKey: "vocab")
                 model.removeObject(forKey: "merges")
+                if modelType == nil {
+                    model["type"] = "BPE"
+                }
                 parsed["model"] = model
-            } else if modelType == "Unigram", let vocab = model["vocab"] as? NSArray {
+            } else if isUnigram, let vocab = model["vocab"] as? NSArray {
                 tokenizerVocab = .unigram(vocab)
                 model.removeObject(forKey: "vocab")
+                if modelType == nil {
+                    model["type"] = "Unigram"
+                }
                 parsed["model"] = model
             }
         }
@@ -572,22 +690,20 @@ package enum SwiftAutoTokenizerDirectoryLoader {
 
     package static func loadTokenizerCore(
         from directory: URL,
-        tokenizerConfig: Config,
-        strict: Bool
+        tokenizerConfig: Config
     ) async throws -> any Tokenizer {
         let artifacts = try loadTokenizerArtifacts(from: directory)
         return try await SwiftAutoTokenizerFactory.from(
             tokenizerConfig: tokenizerConfig,
             tokenizerData: artifacts.tokenizerData,
             tokenizerVocab: artifacts.tokenizerVocab,
-            tokenizerMerges: artifacts.tokenizerMerges,
-            strict: strict
+            tokenizerMerges: artifacts.tokenizerMerges
         )
     }
 
-    package static func load(from directory: URL, strict: Bool) async throws -> any Tokenizer {
+    package static func load(from directory: URL) async throws -> any Tokenizer {
         let tokenizerConfig = try loadTokenizerConfig(from: directory)
-        return try await loadTokenizerCore(from: directory, tokenizerConfig: tokenizerConfig, strict: strict)
+        return try await loadTokenizerCore(from: directory, tokenizerConfig: tokenizerConfig)
     }
 }
 
@@ -596,31 +712,18 @@ private enum SwiftAutoTokenizerFactory {
         tokenizerConfig: Config,
         tokenizerData: Config,
         tokenizerVocab: TokenizerVocab?,
-        tokenizerMerges: TokenizerMerges?,
-        strict: Bool = true
+        tokenizerMerges: TokenizerMerges?
     ) async throws -> any Tokenizer {
-        if tokenizerName(from: tokenizerConfig) == "LlamaTokenizer" {
-            return try await makeLlamaTokenizer(
-                tokenizerConfig: tokenizerConfig,
-                tokenizerData: tokenizerData,
-                tokenizerVocab: tokenizerVocab,
-                tokenizerMerges: tokenizerMerges,
-                strict: strict
-            )
-        }
-
         let parsed = SwiftTokenizerBackend.parseAddedTokens(from: tokenizerData)
         let model = try await TokenizerModel.from(
             tokenizerConfig: tokenizerConfig,
             tokenizerData: tokenizerData,
             addedTokens: parsed.tokens,
             tokenizerVocab: tokenizerVocab,
-            tokenizerMerges: tokenizerMerges,
-            strict: strict
+            tokenizerMerges: tokenizerMerges
         )
         let runtimeConfiguration = TokenizerRuntimeConfiguration(tokenizerConfig: tokenizerConfig)
         let backend = try SwiftTokenizerBackend(
-            tokenizerConfig: tokenizerConfig,
             tokenizerData: tokenizerData,
             model: model,
             runtimeConfiguration: runtimeConfiguration
@@ -631,54 +734,5 @@ private enum SwiftAutoTokenizerFactory {
             backend: backend
         )
     }
-
-    private static func makeLlamaTokenizer(
-        tokenizerConfig: Config,
-        tokenizerData: Config,
-        tokenizerVocab: TokenizerVocab?,
-        tokenizerMerges: TokenizerMerges?,
-        strict: Bool
-    ) async throws -> any Tokenizer {
-        let isLegacy = tokenizerConfig.legacy.boolean(or: true)
-        let updatedData = try LlamaTokenizerConfig.buildUpdatedConfig(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: tokenizerData,
-            isLegacy: isLegacy
-        )
-        let parsed = SwiftTokenizerBackend.parseAddedTokens(from: updatedData)
-        let model = try await TokenizerModel.from(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: updatedData,
-            addedTokens: parsed.tokens,
-            tokenizerVocab: tokenizerVocab,
-            tokenizerMerges: tokenizerMerges,
-            strict: strict
-        )
-        let runtimeConfiguration = TokenizerRuntimeConfiguration(tokenizerConfig: tokenizerConfig)
-        let backend = try LlamaSwiftTokenizerBackend(
-            tokenizerConfig: tokenizerConfig,
-            tokenizerData: updatedData,
-            model: model,
-            runtimeConfiguration: runtimeConfiguration,
-            isLegacy: isLegacy
-        )
-        return PreTrainedTokenizer(
-            model: model,
-            runtimeConfiguration: runtimeConfiguration,
-            backend: backend
-        )
-    }
-
-    private static func tokenizerName(from tokenizerConfig: Config) -> String? {
-        tokenizerConfig.tokenizerClass.string()?.replacingOccurrences(of: "Fast", with: "")
-    }
 }
-
-public extension AutoTokenizer {
-    static func register(_ tokenizerClass: PreTrainedTokenizerModel.Type, for name: String) {
-        TokenizerModel.registerTokenizer(tokenizerClass, for: name)
-    }
-}
-
-private final class T5Tokenizer: UnigramTokenizer, @unchecked Sendable {}
 #endif

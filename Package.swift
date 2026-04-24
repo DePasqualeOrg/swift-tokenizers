@@ -44,13 +44,11 @@ let tokenizerCoreSources = [
     "BinaryDistinct.swift",
     "Config.swift",
     "Tokenizer.swift",
-    "TokenizerCompatibility.swift",
     "TokenizerRuntimeConfiguration.swift",
 ]
 
 let tokenizerSwiftBackendSources = [
     "BPETokenizer.swift",
-    "BertTokenizer.swift",
     "ByteEncoder.swift",
     "Decoder.swift",
     "Normalizer.swift",
@@ -60,6 +58,8 @@ let tokenizerSwiftBackendSources = [
     "TokenLattice.swift",
     "Trie.swift",
     "UnigramTokenizer.swift",
+    "WordLevelTokenizer.swift",
+    "WordPieceTokenizer.swift",
     "YYJSONParser.swift",
     "SwiftTokenizerBackend.swift",
 ]

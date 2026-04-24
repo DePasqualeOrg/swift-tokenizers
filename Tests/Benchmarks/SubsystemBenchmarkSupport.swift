@@ -122,15 +122,13 @@ func benchmarkTokenizerCoreLoading(
     let runtimeConfiguration = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
     _ = try await RustAutoTokenizerDirectoryLoader.loadTokenizerCore(
         from: tokenizerDirectory,
-        runtimeConfiguration: runtimeConfiguration,
-        strict: true
+        runtimeConfiguration: runtimeConfiguration
     )
     #elseif TOKENIZERS_SWIFT_BACKEND
     let tokenizerConfig = try SwiftAutoTokenizerDirectoryLoader.loadTokenizerConfig(from: tokenizerDirectory)
     _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
         from: tokenizerDirectory,
-        tokenizerConfig: tokenizerConfig,
-        strict: true
+        tokenizerConfig: tokenizerConfig
     )
     #else
     #error("No tokenizer backend selected")
@@ -142,14 +140,12 @@ func benchmarkTokenizerCoreLoading(
         #if Rust
         _ = try await RustAutoTokenizerDirectoryLoader.loadTokenizerCore(
             from: tokenizerDirectory,
-            runtimeConfiguration: runtimeConfiguration,
-            strict: true
+            runtimeConfiguration: runtimeConfiguration
         )
         #elseif TOKENIZERS_SWIFT_BACKEND
         _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
             from: tokenizerDirectory,
-            tokenizerConfig: tokenizerConfig,
-            strict: true
+            tokenizerConfig: tokenizerConfig
         )
         #endif
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000

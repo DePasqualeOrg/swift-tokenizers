@@ -10,8 +10,6 @@ pub(crate) struct TokenizerJsonMetadata {
     pub(crate) bos_token: Option<String>,
     pub(crate) eos_token: Option<String>,
     pub(crate) unknown_token: Option<String>,
-    pub(crate) fuse_unknown_tokens: bool,
-    pub(crate) post_processor_type: Option<String>,
 }
 
 pub(crate) struct TokenizerJsonArtifacts {
@@ -30,20 +28,27 @@ pub(crate) fn load_artifacts(directory: &Path) -> Result<TokenizerJsonArtifacts,
     };
     let metadata = extract_metadata_from_value(&tokenizer_data);
 
-    Ok(TokenizerJsonArtifacts { tokenizer, metadata })
+    Ok(TokenizerJsonArtifacts {
+        tokenizer,
+        metadata,
+    })
 }
 
 fn read_required_bytes(path: &Path) -> Result<Vec<u8>, CoreError> {
     fs::read(path).map_err(|_| CoreError::MissingConfig)
 }
 
-fn load_tokenizer(bytes: &[u8], tokenizer_data: &mut Option<JsonValue>) -> Result<Tokenizer, CoreError> {
+fn load_tokenizer(
+    bytes: &[u8],
+    tokenizer_data: &mut Option<JsonValue>,
+) -> Result<Tokenizer, CoreError> {
     if let Ok(tokenizer) = Tokenizer::from_bytes(bytes) {
         return Ok(tokenizer);
     }
 
     let tokenizer_data = tokenizer_data.get_or_insert_with(|| {
-        serde_json::from_slice(bytes).expect("fallback tokenizer JSON parse should match earlier load failure path")
+        serde_json::from_slice(bytes)
+            .expect("fallback tokenizer JSON parse should match earlier load failure path")
     });
     let tokenizer_bytes = prepare_tokenizer_bytes(tokenizer_data)?;
     Tokenizer::from_bytes(&tokenizer_bytes)
@@ -72,12 +77,17 @@ fn normalize_added_tokens(tokenizer_data: &mut JsonValue) {
         added_token
             .entry("rstrip".to_owned())
             .or_insert(JsonValue::Bool(false));
+        let special = added_token
+            .entry("special".to_owned())
+            .or_insert(JsonValue::Bool(false))
+            .as_bool()
+            .unwrap_or(false);
+        // Mirror upstream `AddedToken::from`, which sets `normalized = !special` when the field
+        // is absent. Defaulting `normalized=false` for non-special tokens would make them match
+        // raw input instead of normalized input, diverging from the Swift backend.
         added_token
             .entry("normalized".to_owned())
-            .or_insert(JsonValue::Bool(false));
-        added_token
-            .entry("special".to_owned())
-            .or_insert(JsonValue::Bool(false));
+            .or_insert(JsonValue::Bool(!special));
     }
 }
 
@@ -120,32 +130,20 @@ fn extract_metadata_from_value(tokenizer_data: &JsonValue) -> TokenizerJsonMetad
             let vocab = model?.get("vocab")?.as_array()?;
             let token = vocab.get(unk_id)?;
             if let Some(value) = token.as_array() {
-                return value.first().and_then(JsonValue::as_str).map(ToOwned::to_owned);
+                return value
+                    .first()
+                    .and_then(JsonValue::as_str)
+                    .map(ToOwned::to_owned);
             }
-            token.get("token")
+            token
+                .get("token")
                 .and_then(JsonValue::as_str)
                 .map(ToOwned::to_owned)
         });
-    let fuse_unknown_tokens = model
-        .and_then(|model| model.get("fuse_unk"))
-        .and_then(JsonValue::as_bool)
-        .unwrap_or_else(|| {
-            model
-                .and_then(|model| model.get("type"))
-                .and_then(JsonValue::as_str)
-                == Some("Unigram")
-        });
-
     TokenizerJsonMetadata {
         bos_token: extract_token_string(tokenizer_data.get("bos_token")),
         eos_token: extract_token_string(tokenizer_data.get("eos_token")),
         unknown_token,
-        fuse_unknown_tokens,
-        post_processor_type: tokenizer_data
-            .get("post_processor")
-            .and_then(|post_processor| post_processor.get("type"))
-            .and_then(JsonValue::as_str)
-            .map(ToOwned::to_owned),
     }
 }
 
@@ -155,8 +153,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn offline_fixture_directory() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../Tests/TokenizersTests/Resources")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/TokenizersTests/Resources")
     }
 
     #[test]
@@ -167,5 +164,39 @@ mod tests {
 
         assert_eq!(artifacts.metadata.unknown_token.as_deref(), Some("<unk>"));
         assert_eq!(artifacts.tokenizer.token_to_id("<unk>"), Some(3));
+    }
+
+    #[test]
+    fn normalize_added_tokens_defaults_normalized_to_not_special() {
+        let mut data = serde_json::json!({
+            "added_tokens": [
+                { "id": 0, "content": "<special>", "special": true },
+                { "id": 1, "content": "regular" },
+            ],
+        });
+
+        normalize_added_tokens(&mut data);
+
+        let tokens = data["added_tokens"].as_array().unwrap();
+        assert_eq!(tokens[0]["normalized"], JsonValue::Bool(false));
+        assert_eq!(tokens[0]["special"], JsonValue::Bool(true));
+        assert_eq!(tokens[1]["normalized"], JsonValue::Bool(true));
+        assert_eq!(tokens[1]["special"], JsonValue::Bool(false));
+    }
+
+    #[test]
+    fn normalize_added_tokens_preserves_explicit_normalized() {
+        let mut data = serde_json::json!({
+            "added_tokens": [
+                { "id": 0, "content": "x", "special": false, "normalized": false },
+                { "id": 1, "content": "y", "special": true, "normalized": true },
+            ],
+        });
+
+        normalize_added_tokens(&mut data);
+
+        let tokens = data["added_tokens"].as_array().unwrap();
+        assert_eq!(tokens[0]["normalized"], JsonValue::Bool(false));
+        assert_eq!(tokens[1]["normalized"], JsonValue::Bool(true));
     }
 }
