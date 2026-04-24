@@ -10,7 +10,10 @@ name = "tokenizers_rust"
 crate-type = ["staticlib"]
 
 [dependencies]
-minijinja = { version = "2.19.0", default-features = false, features = ["adjacent_loop_items", "builtins", "deserialization", "json", "macros", "multi_template", "serde", "std_collections"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+minijinja = { version = "2.19.0", default-features = false, features = ["adjacent_loop_items", "builtins", "deserialization", "json", "loop_controls", "macros", "multi_template", "serde", "std_collections"] }
+minijinja-contrib = { version = "2.19.0", default-features = false, features = ["pycompat"] }
+regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
