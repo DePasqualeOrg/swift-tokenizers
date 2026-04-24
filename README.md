@@ -20,7 +20,7 @@ Swift Tokenizers uses Swift package traits and requires Swift 6.1 or newer.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.3.2", traits: ["Swift"])
+    .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.4.2", traits: ["Swift"])
 ]
 ```
 
@@ -32,7 +32,7 @@ To build with the Rust backend instead of the default Swift backend, enable only
 dependencies: [
     .package(
         url: "https://github.com/DePasqualeOrg/swift-tokenizers.git",
-        from: "0.3.2",
+        from: "0.4.2",
         traits: ["Rust"]
     )
 ]
@@ -143,28 +143,33 @@ let tokenizer = try await AutoTokenizer.from(directory: directory)
 
 | | Swift Transformers | Swift backend | | Rust backend | |
 | --- | ---: | ---: | --- | ---: | --- |
-| Tokenizer load | 399.3 ms | 176.1 ms | 2.3x faster | 164.5 ms | 2.4x faster |
-| Tokenization | 48.4 ms | 23.0 ms | 2.1x faster | 3.5 ms | 13.8x faster |
-| Decoding | 30.9 ms | 13.3 ms | 2.3x faster | 3.7 ms | 8.4x faster |
-| LLM load | 409.7 ms | 189.5 ms | 2.2x faster | 184.5 ms | 2.2x faster |
-| VLM load | 441.6 ms | 235.2 ms | 1.9x faster | 223.1 ms | 2.0x faster |
-| Embedding load | 412.0 ms | 191.5 ms | 2.2x faster | 191.6 ms | 2.2x faster |
+| Tokenizer load | 399.3 ms | 178.5 ms | 2.2x faster | 170.5 ms | 2.3x faster |
+| Tokenization | 48.4 ms | 24.4 ms | 2.0x faster | 3.7 ms | 13.1x faster |
+| Decoding | 30.9 ms | 14.6 ms | 2.1x faster | 3.9 ms | 7.9x faster |
+| LLM load | 409.7 ms | 195.5 ms | 2.1x faster | 192.5 ms | 2.1x faster |
+| VLM load | 441.6 ms | 233.8 ms | 1.9x faster | 233.8 ms | 1.9x faster |
+| Embedding load | 412.0 ms | 204.2 ms | 2.0x faster | 198.8 ms | 2.1x faster |
 
-These results were observed on an M3 MacBook Pro using Swift Tokenizers `7e5ea0d`, Swift Transformers [`1.3.0`](https://github.com/huggingface/swift-transformers/releases/tag/1.3.0), and MLX Swift LM `8c9dd63`.
+These results were observed on an M3 MacBook Pro using Swift Tokenizers [`0.4.2`](https://github.com/DePasqualeOrg/swift-tokenizers/releases/tag/0.4.2), Swift Transformers [`1.3.0`](https://github.com/huggingface/swift-transformers/releases/tag/1.3.0), and MLX Swift LM [`3.31.3`](https://github.com/ml-explore/mlx-swift-lm/releases/tag/3.31.3).
 
 ### Running benchmarks
 
-The benchmarks use tests from MLX Swift LM and can be run from this package in Xcode. Set `TOKENIZERS_ENABLE_BENCHMARKS=1` to include the benchmark target in the package graph and enable the benchmark suite.
+The benchmarks use tests from MLX Swift LM and are gated behind `TOKENIZERS_ENABLE_BENCHMARKS=1` so that ordinary consumers don't pull `mlx-swift-lm` (which requires Metal/Accelerate and doesn't build on Linux) into their dependency graph. Set the env var before evaluating the package to include the benchmark target.
 
-From the command line, use release builds for accurate numbers. The model loading benchmarks (LLM, VLM, embedding) require Metal, which is only available through `xcodebuild`. However, `xcodebuild` does not support package traits, so `swift test` is needed to run benchmarks with the Rust backend.
+**In Xcode**: the env var must be present when Xcode resolves the package, which happens on launch. The easiest persistent option is `launchctl setenv TOKENIZERS_ENABLE_BENCHMARKS 1` (run once, then reopen Xcode). To run with the Rust backend, enable the `Rust` trait under **File → Packages → Package Traits…**.
+
+**From the command line**: use release builds for accurate numbers. Model loading benchmarks (LLM, VLM, embedding) require Metal, which is only available through `xcodebuild`. `xcodebuild` has no `--traits` flag, so `TOKENIZERS_BACKEND=Rust` flips the default trait at manifest-evaluation time to drive the Rust backend.
 
 ```bash
-# Full suite (requires Metal)
-TOKENIZERS_ENABLE_BENCHMARKS=1 TEST_RUNNER_TOKENIZERS_ENABLE_BENCHMARKS=1 xcodebuild test -scheme Benchmarks -configuration Release -destination 'platform=macOS,arch=arm64'
+# Full suite, Swift backend (requires Metal)
+TOKENIZERS_ENABLE_BENCHMARKS=1 xcodebuild test -scheme Benchmarks -destination 'platform=macOS,arch=arm64'
 
-# Tokenizer benchmarks only
+# Full suite, Rust backend (requires Metal)
+TOKENIZERS_ENABLE_BENCHMARKS=1 TOKENIZERS_BACKEND=Rust xcodebuild test -scheme Benchmarks -destination 'platform=macOS,arch=arm64'
+
+# Tokenizer benchmarks only, Swift backend
 TOKENIZERS_ENABLE_BENCHMARKS=1 swift test -c release --filter Benchmarks
 
-# Tokenizer benchmarks with Rust backend
+# Tokenizer benchmarks only, Rust backend
 TOKENIZERS_ENABLE_BENCHMARKS=1 swift test -c release --traits Rust --filter Benchmarks
 ```

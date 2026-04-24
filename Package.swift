@@ -1,44 +1,16 @@
 // swift-tools-version: 6.1
 
-import Foundation
 import PackageDescription
 
-struct TokenizersRustPin: Decodable {
-    let hashSchemaVersion: Int
-    let xcframeworkURL: String
-    let checksum: String
-
-    enum CodingKeys: String, CodingKey {
-        case hashSchemaVersion = "hash_schema_version"
-        case xcframeworkURL = "xcframework_url"
-        case checksum
-    }
-}
-
-func loadTokenizersRustPin() -> TokenizersRustPin {
-    let supportedHashSchemaVersion = 1
-    let pinPath = "\(Context.packageDirectory)/rust/Pin.json"
-    let pinData: Data
-    do {
-        pinData = try Data(contentsOf: URL(fileURLWithPath: pinPath))
-    } catch {
-        fatalError("Failed to read \(pinPath): \(error). Run scripts/rust/release/cut-release.sh or restore the file from git.")
-    }
-
-    let pin: TokenizersRustPin
-    do {
-        pin = try JSONDecoder().decode(TokenizersRustPin.self, from: pinData)
-    } catch {
-        fatalError("Failed to decode \(pinPath): \(error). Expected keys hash_schema_version, xcframework_url, checksum.")
-    }
-
-    guard pin.hashSchemaVersion == supportedHashSchemaVersion else {
-        fatalError(
-            "Unsupported hash_schema_version \(pin.hashSchemaVersion) in \(pinPath); this Package.swift supports \(supportedHashSchemaVersion). Update Package.swift and Pin.json together."
-        )
-    }
-    return pin
-}
+// Pinned XCFramework for the Rust backend. These mirror `rust/Pin.json` and are
+// kept in sync by scripts/rust/release/cut-release.sh. Inlined here rather than
+// read from Pin.json because manifest-eval file I/O is unreliable for URL-based
+// dependency consumers (both `Context.packageDirectory` and `#filePath` return
+// synthetic paths during dep evaluation).
+let tokenizersRustXCFrameworkURL =
+    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.4.1/TokenizersRust-0.4.1.xcframework.zip"
+let tokenizersRustXCFrameworkChecksum =
+    "9b403e6053eefdcbb3a5aac62577467a4c1ae970e84df0ac28bd22c624bc0832"
 
 let tokenizerCoreSources = [
     "BinaryDistinct.swift",
@@ -73,9 +45,12 @@ let tokenizerDirectorySources =
     + tokenizerSwiftBackendSources
     + tokenizerRustBackendSources
 
-let benchmarksEnabled = Context.environment["TOKENIZERS_ENABLE_BENCHMARKS"] == "1"
 let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
 let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH"]
+
+// xcodebuild has no `--traits` flag; `TOKENIZERS_BACKEND=Rust` flips the default trait
+// at manifest-eval time. `swift test --traits` and Xcode's Package Traits UI are unaffected.
+let defaultBackendTrait = Context.environment["TOKENIZERS_BACKEND"] == "Rust" ? "Rust" : "Swift"
 
 func excludedTokenizerSources(keeping sources: [String]) -> [String] {
     tokenizerDirectorySources.filter { !sources.contains($0) }
@@ -87,15 +62,19 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.2.0"),
 ]
 
+// The Benchmarks target pulls in mlx-swift-lm, which transitively requires Metal
+// and Accelerate. Gate the dep + target on macOS + opt-in env var so Linux (and
+// plain `swift test` on macOS) don't compile an unbuildable graph. Xcode users
+// who want to see Benchmarks in the test navigator must launch Xcode with the
+// env var set (e.g. `launchctl setenv TOKENIZERS_ENABLE_BENCHMARKS 1`).
+let benchmarksEnabled = Context.environment["TOKENIZERS_ENABLE_BENCHMARKS"] == "1"
+#if os(macOS)
 if benchmarksEnabled {
     packageDependencies.append(
-        .package(
-            // TODO: Switch to a major version pin once mlx-swift-lm publishes a new major release that includes these APIs.
-            url: "https://github.com/ml-explore/mlx-swift-lm.git",
-            revision: "8c9dd6391139242261bcf27d253c326f9cf2d567"
-        )
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.31.3")
     )
 }
+#endif
 
 if docsEnabled {
     packageDependencies.append(
@@ -105,18 +84,14 @@ if docsEnabled {
 
 let tokenizersRustTarget: Target =
     if let localRustArtifactPath {
-        // Used by the Rust release workflow to validate the freshly built XCFramework
-        // before publishing it as a remote binary artifact.
+        // Used by the Rust release workflow to validate a freshly built XCFramework before publishing.
         .binaryTarget(name: "TokenizersRust", path: localRustArtifactPath)
     } else {
-        {
-            let pin = loadTokenizersRustPin()
-            return .binaryTarget(
-                name: "TokenizersRust",
-                url: pin.xcframeworkURL,
-                checksum: pin.checksum
-            )
-        }()
+        .binaryTarget(
+            name: "TokenizersRust",
+            url: tokenizersRustXCFrameworkURL,
+            checksum: tokenizersRustXCFrameworkChecksum
+        )
     }
 
 var packageTargets: [Target] = [
@@ -169,10 +144,9 @@ var packageTargets: [Target] = [
                 .define("Rust", .when(traits: ["Rust"])),
             ]
             if docsEnabled {
-                // swift-docc-plugin does not propagate package traits to its
-                // symbol-graph sub-builds, so the facade is compiled with both
-                // backends enabled at once. Signal that to BackendSelection.swift
-                // so it can skip the mutex guard for the docs build only.
+                // swift-docc-plugin doesn't propagate traits to symbol-graph sub-builds, so
+                // both backends compile at once. BackendSelection.swift drops the mutex guard
+                // when this define is set.
                 settings.append(.define("TOKENIZERS_DOCS_BUILD"))
             }
             return settings
@@ -195,6 +169,7 @@ var packageTargets: [Target] = [
     ),
 ]
 
+#if os(macOS)
 if benchmarksEnabled {
     packageTargets.append(
         .testTarget(
@@ -215,6 +190,7 @@ if benchmarksEnabled {
         )
     )
 }
+#endif
 
 let package = Package(
     name: "swift-tokenizers",
@@ -223,7 +199,7 @@ let package = Package(
         .library(name: "Tokenizers", targets: ["Tokenizers"])
     ],
     traits: [
-        .default(enabledTraits: ["Swift"]),
+        .default(enabledTraits: [defaultBackendTrait]),
         .trait(name: "Swift"),
         .trait(name: "Rust"),
     ],
