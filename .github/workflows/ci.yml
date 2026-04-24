@@ -39,7 +39,11 @@ jobs:
               run: bash scripts/rust/build/build-rust-xcframework.sh
 
             - name: Run Rust trait tests
-              run: swift test --traits Rust
+              env:
+                  TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: Binaries/TokenizersRust.xcframework
+              run: |
+                  swift package clean
+                  swift test --traits Rust
 
     build-linux:
         name: Build (Linux)
