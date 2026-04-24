@@ -64,6 +64,15 @@ jobs:
             - name: Build tests
               run: swift build --build-tests
 
+    docs:
+        name: Documentation
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Verify documentation
+              run: bash scripts/verify-docs.sh
+
     lint:
         name: Lint
         runs-on: macos-latest

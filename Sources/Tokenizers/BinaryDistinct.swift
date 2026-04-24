@@ -31,7 +31,6 @@ public struct BinaryDistinctString: Equatable, Hashable, Sendable, Comparable, C
         string.count
     }
 
-    /// Satisfies ``CustomStringConvertible`` protocol.
     public var description: String {
         string
     }
@@ -75,7 +74,6 @@ public struct BinaryDistinctString: Equatable, Hashable, Sendable, Comparable, C
         value = data
     }
 
-    /// Satisfies ``ExpressibleByStringLiteral`` protocol.
     public init(stringLiteral value: String) {
         self.init(value)
     }
@@ -242,7 +240,6 @@ public struct BinaryDistinctCharacter: Equatable, Hashable, CustomStringConverti
         self.bytes = bytes
     }
 
-    /// Satisfies ``ExpressibleByStringLiteral`` protocol.
     public init(stringLiteral value: String) {
         self.init(value)
     }
