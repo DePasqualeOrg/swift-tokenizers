@@ -176,16 +176,17 @@ jobs:
                       exit 1
                   fi
 
-                  prerelease_flag=()
+                  release_cmd=(
+                      gh release create "${tag}" "${archive}" "${checksum}" "${manifest}"
+                      --target "$GITHUB_SHA"
+                      --title "${title}"
+                      --notes-file "${notes_file}"
+                  )
                   if [[ "${VERSION}" == *-* ]]; then
-                      prerelease_flag=(--prerelease)
+                      release_cmd+=(--prerelease)
                   fi
 
-                  gh release create "${tag}" "${archive}" "${checksum}" "${manifest}" \
-                      --target "$GITHUB_SHA" \
-                      --title "${title}" \
-                      --notes-file "${notes_file}" \
-                      "${prerelease_flag[@]}"
+                  "${release_cmd[@]}"
 
                   release_url="$(gh release view "${tag}" --json url --jq '.url')"
                   {
