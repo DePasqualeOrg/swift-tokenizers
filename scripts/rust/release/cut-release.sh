@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
+# Dispatch rust-release.yml for the current branch at HEAD, wait for the run
+# to finish, and verify the published release was built from the expected
+# commit.
+#
+# Intended to be run on a branch that already contains the Rust source and
+# workflow changes you want to publish, with a clean working tree pushed to
+# origin. For a normal PR flow this is a Rust-touching PR branch; for the
+# bootstrap 0.3.2 release under the new workflow this is main.
+#
+# A later change will extend this script to also download the manifest asset,
+# write rust/Pin.json, and commit the bump on the current branch. For now it
+# stops after publishing.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-VERSION="${1:?usage: scripts/rust/release/publish-rust-release.sh <version> [--ref <ref>]}"
+VERSION="${1:?usage: scripts/rust/release/cut-release.sh <version> [--no-wait]}"
 shift || true
 
-REF="main"
 WAIT=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ref)
-      REF="${2:?missing value for --ref}"
-      shift 2
-      ;;
     --no-wait)
       WAIT=false
       shift
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "usage: scripts/rust/release/publish-rust-release.sh <version> [--ref <ref>] [--no-wait]" >&2
+      echo "usage: scripts/rust/release/cut-release.sh <version> [--no-wait]" >&2
       exit 1
       ;;
   esac
@@ -34,19 +42,48 @@ fi
 
 cd "${REPO_ROOT}"
 
+TAG="tokenizers-rust-${VERSION}"
+if gh release view "${TAG}" >/dev/null 2>&1; then
+  echo "Release ${TAG} already exists. Publish a new semantic version." >&2
+  exit 1
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Working tree is not clean. Commit or stash changes before cutting a release." >&2
+  exit 1
+fi
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "${BRANCH}" == "HEAD" ]]; then
+  echo "Detached HEAD. Check out a branch before cutting a release." >&2
+  exit 1
+fi
+
+EXPECTED_COMMIT="$(git rev-parse HEAD)"
+
+git fetch origin "${BRANCH}" --quiet
+REMOTE_COMMIT="$(git rev-parse "origin/${BRANCH}")"
+if [[ "${EXPECTED_COMMIT}" != "${REMOTE_COMMIT}" ]]; then
+  echo "Local ${BRANCH} (${EXPECTED_COMMIT}) does not match origin/${BRANCH} (${REMOTE_COMMIT})." >&2
+  echo "Push your branch before cutting a release so the workflow runs against the expected commit." >&2
+  exit 1
+fi
+
 mapfile -t existing_run_ids < <(
   gh run list \
     --workflow rust-release.yml \
-    --branch "${REF}" \
+    --branch "${BRANCH}" \
     --limit 20 \
     --json databaseId \
     --jq '.[].databaseId'
 )
 
-gh workflow run rust-release.yml --ref "${REF}" -f "version=${VERSION}"
+gh workflow run rust-release.yml --ref "${BRANCH}" \
+  -f "version=${VERSION}" \
+  -f "expected_commit=${EXPECTED_COMMIT}"
 
 echo
-echo "Triggered Publish Rust XCFramework for ${VERSION} on ${REF}."
+echo "Dispatched Publish Rust XCFramework for ${VERSION} on ${BRANCH} at ${EXPECTED_COMMIT}."
 
 if [[ "${WAIT}" != true ]]; then
   echo "Inspect status with:"
@@ -59,7 +96,7 @@ for _ in {1..24}; do
   run_id="$(
     gh run list \
       --workflow rust-release.yml \
-      --branch "${REF}" \
+      --branch "${BRANCH}" \
       --limit 20 \
       --json databaseId \
       --jq '.[].databaseId' \
@@ -107,10 +144,20 @@ while true; do
 
   if [[ "${status}" == "completed" ]]; then
     if [[ "${conclusion}" == "success" ]]; then
-      release_url="$(gh release view "tokenizers-rust-${VERSION}" --json url --jq '.url')"
+      run_head_sha="$(gh run view "${run_id}" --json headSha --jq '.headSha')"
+      if [[ "${run_head_sha}" != "${EXPECTED_COMMIT}" ]]; then
+        echo "Run ${run_id} completed, but its commit (${run_head_sha}) differs from the expected commit (${EXPECTED_COMMIT})." >&2
+        echo "Do not trust this release. Investigate before using the artifact." >&2
+        exit 1
+      fi
+
+      release_url="$(gh release view "${TAG}" --json url --jq '.url')"
       echo "Rust artifact release published successfully."
       echo "Run: ${run_url}"
       echo "Release: ${release_url}"
+      echo
+      echo "Note: rust/Pin.json update not yet automated. Extend cut-release.sh in a"
+      echo "following PR to download the manifest asset and commit the pin bump."
       exit 0
     fi
 
