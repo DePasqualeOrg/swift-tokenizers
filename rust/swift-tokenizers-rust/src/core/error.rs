@@ -19,4 +19,17 @@ impl CoreError {
             Self::Internal(_) => 100,
         }
     }
+
+    /// The bare message payload sent across the FFI boundary, or `None` for
+    /// variants without a payload. Excludes the category prefix that `Display`
+    /// adds, since the Swift consumer's `TokenizerError.errorDescription` is the
+    /// canonical place for that prefix.
+    pub(crate) fn ffi_message(&self) -> Option<String> {
+        match self {
+            Self::MissingConfig => None,
+            Self::ChatTemplate(s) | Self::MismatchedConfig(s) | Self::Internal(s) => {
+                Some(s.clone())
+            }
+        }
+    }
 }
