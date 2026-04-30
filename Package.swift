@@ -114,7 +114,7 @@ var packageTargets: [Target] = [
         exclude: excludedTokenizerSources(keeping: tokenizerSwiftBackendSources),
         sources: tokenizerSwiftBackendSources,
         swiftSettings: [
-            .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"]))
+            .define("Swift", .when(traits: ["Swift"]))
         ]
     ),
     .target(
@@ -140,7 +140,7 @@ var packageTargets: [Target] = [
         path: "Sources/TokenizersFacade",
         swiftSettings: {
             var settings: [SwiftSetting] = [
-                .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+                .define("Swift", .when(traits: ["Swift"])),
                 .define("Rust", .when(traits: ["Rust"])),
             ]
             if docsEnabled {
@@ -163,7 +163,7 @@ var packageTargets: [Target] = [
         ],
         resources: [.process("Resources")],
         swiftSettings: [
-            .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+            .define("Swift", .when(traits: ["Swift"])),
             .define("Rust", .when(traits: ["Rust"])),
         ]
     ),
@@ -184,7 +184,7 @@ if benchmarksEnabled {
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             swiftSettings: [
-                .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+                .define("Swift", .when(traits: ["Swift"])),
                 .define("Rust", .when(traits: ["Rust"])),
             ]
         )

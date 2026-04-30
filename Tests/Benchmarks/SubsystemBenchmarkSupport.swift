@@ -5,7 +5,7 @@ import MLXLMCommon
 import Tokenizers
 import TokenizersCore
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 import TokenizersSwiftBackend
 #endif
 
@@ -84,7 +84,7 @@ func benchmarkSidecarLoading(
 
     #if Rust
     _ = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-    #elseif TOKENIZERS_SWIFT_BACKEND
+    #elseif Swift
     _ = try SwiftAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
     #else
     #error("No tokenizer backend selected")
@@ -95,7 +95,7 @@ func benchmarkSidecarLoading(
         let start = CFAbsoluteTimeGetCurrent()
         #if Rust
         _ = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-        #elseif TOKENIZERS_SWIFT_BACKEND
+        #elseif Swift
         _ = try SwiftAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
         #endif
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
@@ -124,7 +124,7 @@ func benchmarkTokenizerCoreLoading(
         from: tokenizerDirectory,
         runtimeConfiguration: runtimeConfiguration
     )
-    #elseif TOKENIZERS_SWIFT_BACKEND
+    #elseif Swift
     let tokenizerConfig = try SwiftAutoTokenizerDirectoryLoader.loadTokenizerConfig(from: tokenizerDirectory)
     _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
         from: tokenizerDirectory,
@@ -142,7 +142,7 @@ func benchmarkTokenizerCoreLoading(
             from: tokenizerDirectory,
             runtimeConfiguration: runtimeConfiguration
         )
-        #elseif TOKENIZERS_SWIFT_BACKEND
+        #elseif Swift
         _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
             from: tokenizerDirectory,
             tokenizerConfig: tokenizerConfig

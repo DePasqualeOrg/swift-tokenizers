@@ -1,7 +1,7 @@
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 import Foundation
 import TokenizersCore
 import yyjson

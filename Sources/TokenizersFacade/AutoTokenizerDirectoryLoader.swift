@@ -1,6 +1,6 @@
 import Foundation
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 import TokenizersSwiftBackend
 #endif
 
@@ -25,7 +25,7 @@ public extension AutoTokenizer {
     static func from(directory: URL) async throws -> Tokenizer {
         #if Rust
         return try await RustAutoTokenizerDirectoryLoader.load(from: directory)
-        #elseif TOKENIZERS_SWIFT_BACKEND
+        #elseif Swift
         return try await SwiftAutoTokenizerDirectoryLoader.load(from: directory)
         #else
         fatalError("No tokenizer backend is enabled")

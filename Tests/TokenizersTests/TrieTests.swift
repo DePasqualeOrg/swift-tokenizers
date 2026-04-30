@@ -1,6 +1,6 @@
 // Copyright © Hugging Face SAS
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 import Foundation
 import Testing
 
