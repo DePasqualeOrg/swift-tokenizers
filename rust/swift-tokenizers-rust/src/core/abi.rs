@@ -66,7 +66,7 @@ fn write_error(out_error: *mut st_error_t, error: CoreError) {
 
     unsafe {
         (*out_error).code = error.code();
-        (*out_error).message = string_to_buffer(error.to_string());
+        (*out_error).message = string_to_buffer(error.ffi_message().unwrap_or_default());
     }
 }
 

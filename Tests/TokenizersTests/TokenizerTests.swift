@@ -9,7 +9,7 @@ import Testing
 @testable import Tokenizers
 @testable import TokenizersCore
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 @testable import TokenizersSwiftBackend
 #endif
 

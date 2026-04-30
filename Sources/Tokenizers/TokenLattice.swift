@@ -1,4 +1,4 @@
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 // Copyright © Hugging Face SAS
 
 /// Implements a TokenLattice to implement the Viterbi algorithm

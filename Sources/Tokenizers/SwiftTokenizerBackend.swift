@@ -1,4 +1,4 @@
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 // Copyright © Hugging Face SAS
 // Copyright © Anthony DePasquale
 
@@ -391,7 +391,12 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
         }
         templateCacheLock.unlock()
 
-        let compiled = try Template(templateString, with: .init(lstripBlocks: true, trimBlocks: true))
+        let compiled: Template
+        do {
+            compiled = try Template(templateString, with: .init(lstripBlocks: true, trimBlocks: true))
+        } catch let jinjaError as JinjaError {
+            throw TokenizerError.chatTemplate("Failed to compile chat template: \(jinjaError.localizedDescription)")
+        }
 
         templateCacheLock.lock()
         defer { templateCacheLock.unlock() }
@@ -544,12 +549,18 @@ package class SwiftTokenizerBackend: TokenizerExecutionBackend, @unchecked Senda
     }
 
     package func renderChatTemplate(template: String, contextObject: [String: Any]) throws -> String {
+        // Compile errors are already wrapped by compiledTemplate(for:); only catch
+        // JinjaError from Value(any:) and render here.
         let compiledTemplate = try compiledTemplate(for: template)
-        let context = try Dictionary(
-            uniqueKeysWithValues: contextObject.map { key, value in
-                (key, try Value(any: value))
-            })
-        return try compiledTemplate.render(context)
+        do {
+            let context = try Dictionary(
+                uniqueKeysWithValues: contextObject.map { key, value in
+                    (key, try Value(any: value))
+                })
+            return try compiledTemplate.render(context)
+        } catch let jinjaError as JinjaError {
+            throw TokenizerError.chatTemplate("Failed to render chat template: \(jinjaError.localizedDescription)")
+        }
     }
 
     package func applyChatTemplate(

@@ -8,9 +8,9 @@ import PackageDescription
 // dependency consumers (both `Context.packageDirectory` and `#filePath` return
 // synthetic paths during dep evaluation).
 let tokenizersRustXCFrameworkURL =
-    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.4.1/TokenizersRust-0.4.1.xcframework.zip"
+    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.4.3/TokenizersRust-0.4.3.xcframework.zip"
 let tokenizersRustXCFrameworkChecksum =
-    "9b403e6053eefdcbb3a5aac62577467a4c1ae970e84df0ac28bd22c624bc0832"
+    "d92069cdded9c4101f2cd58364bf8d7c00db141f134fa24506511a152c2cd613"
 
 let tokenizerCoreSources = [
     "BinaryDistinct.swift",
@@ -57,7 +57,7 @@ func excludedTokenizerSources(keeping sources: [String]) -> [String] {
 }
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.0.0"),
+    .package(url: "https://github.com/DePasqualeOrg/swift-jinja.git", "0.2.0"..<"0.3.0"),
     .package(url: "https://github.com/ibireme/yyjson.git", exact: "0.12.0"),
     .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.2.0"),
 ]
@@ -114,7 +114,7 @@ var packageTargets: [Target] = [
         exclude: excludedTokenizerSources(keeping: tokenizerSwiftBackendSources),
         sources: tokenizerSwiftBackendSources,
         swiftSettings: [
-            .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"]))
+            .define("Swift", .when(traits: ["Swift"]))
         ]
     ),
     .target(
@@ -140,7 +140,7 @@ var packageTargets: [Target] = [
         path: "Sources/TokenizersFacade",
         swiftSettings: {
             var settings: [SwiftSetting] = [
-                .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+                .define("Swift", .when(traits: ["Swift"])),
                 .define("Rust", .when(traits: ["Rust"])),
             ]
             if docsEnabled {
@@ -163,7 +163,7 @@ var packageTargets: [Target] = [
         ],
         resources: [.process("Resources")],
         swiftSettings: [
-            .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+            .define("Swift", .when(traits: ["Swift"])),
             .define("Rust", .when(traits: ["Rust"])),
         ]
     ),
@@ -184,7 +184,7 @@ if benchmarksEnabled {
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             swiftSettings: [
-                .define("TOKENIZERS_SWIFT_BACKEND", .when(traits: ["Swift"])),
+                .define("Swift", .when(traits: ["Swift"])),
                 .define("Rust", .when(traits: ["Rust"])),
             ]
         )

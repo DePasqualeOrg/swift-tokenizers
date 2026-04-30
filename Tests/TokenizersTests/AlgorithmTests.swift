@@ -5,7 +5,7 @@ import Testing
 
 @testable import Tokenizers
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 @testable import TokenizersSwiftBackend
 #endif
 
@@ -104,7 +104,7 @@ struct AlgorithmTests {
 
     // MARK: - Unsupported model.type
 
-    #if TOKENIZERS_SWIFT_BACKEND
+    #if Swift
     @Test
     func unsupportedModelTypeThrows() async throws {
         let tokenizerJSON: String = """
@@ -161,7 +161,7 @@ struct AlgorithmTests {
 
     // MARK: - Algorithm dispatch (Swift backend)
 
-    #if TOKENIZERS_SWIFT_BACKEND
+    #if Swift
     @Test
     func dispatchesOnModelType() async throws {
         // BPE
@@ -337,7 +337,7 @@ struct AlgorithmTests {
     /// cases from upstream `tokenizers/tests/added_tokens.rs`. Swift-only because
     /// this exercises `SwiftTokenizerBackend`'s matcher; Rust delegates the entire
     /// flow to the upstream crate, which already has its own coverage.
-    #if TOKENIZERS_SWIFT_BACKEND
+    #if Swift
     @Test
     func addedTokenBehaviorFlags() async throws {
         // Fixture: a simple WordLevel model with four added tokens exercising each

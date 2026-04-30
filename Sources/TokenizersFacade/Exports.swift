@@ -1,5 +1,5 @@
 @_exported import TokenizersCore
 
-#if TOKENIZERS_SWIFT_BACKEND
+#if Swift
 @_exported import TokenizersSwiftBackend
 #endif

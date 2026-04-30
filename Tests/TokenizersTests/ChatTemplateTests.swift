@@ -407,6 +407,57 @@ struct ChatTemplateTests {
         }
     }
 
+    @Test("Apply template surfaces compile errors as TokenizerError")
+    func applyTemplateCompileError() async throws {
+        let tokenizer = try await Self.sharedPhiTokenizer()
+        // Missing closing `%}` makes the template unparseable.
+        let brokenTemplate = "{% for x in messages %}{{ x.content }"
+
+        do {
+            _ = try tokenizer.applyChatTemplate(
+                messages: messages, chatTemplate: .literal(brokenTemplate)
+            )
+            Issue.record("Expected compile error was not thrown")
+        } catch let tokenizerError as TokenizerError {
+            guard case let .chatTemplate(message) = tokenizerError else {
+                Issue.record("Expected .chatTemplate, but got \(tokenizerError)")
+                return
+            }
+            #expect(!message.isEmpty)
+            #if !Rust
+            #expect(message.hasPrefix("Failed to compile chat template"))
+            #endif
+        } catch {
+            Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
+        }
+    }
+
+    @Test("Apply template surfaces render errors as TokenizerError")
+    func applyTemplateRenderError() async throws {
+        let tokenizer = try await Self.sharedPhiTokenizer()
+        // `raise_exception` is a chat-template built-in designed to throw at render time.
+        // Real-world chat templates (Llama, Gemma, etc.) use this for input validation.
+        let template = "{{ raise_exception('forced render failure') }}"
+
+        do {
+            _ = try tokenizer.applyChatTemplate(
+                messages: messages, chatTemplate: .literal(template)
+            )
+            Issue.record("Expected render error was not thrown")
+        } catch let tokenizerError as TokenizerError {
+            guard case let .chatTemplate(message) = tokenizerError else {
+                Issue.record("Expected .chatTemplate, but got \(tokenizerError)")
+                return
+            }
+            #expect(!message.isEmpty)
+            #if !Rust
+            #expect(message.hasPrefix("Failed to render chat template"))
+            #endif
+        } catch {
+            Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
+        }
+    }
+
     /// Performance: cached vs uncached template application
     @Test("Apply chat template performance with caching")
     func applyChatTemplatePerformanceCached() async throws {
