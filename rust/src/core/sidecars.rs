@@ -33,12 +33,14 @@ pub(crate) struct RuntimeConfiguration {
     pub(crate) chat_template: Option<JsonValue>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct TokenizerMetadata {
     pub(crate) runtime_configuration: RuntimeConfiguration,
     pub(crate) bos_token_id: Option<i32>,
     pub(crate) eos_token_id: Option<i32>,
     pub(crate) unknown_token_id: Option<i32>,
+    pub(crate) base_vocab_size: usize,
+    pub(crate) total_vocab_size: usize,
 }
 
 pub(crate) fn load_runtime_configuration(
@@ -127,6 +129,10 @@ fn load_runtime_configuration_impl(
 }
 
 fn extract_u64(value: &JsonValue) -> Option<u64> {
+    // Floats (e.g. `"model_max_length": 1e30`) are deliberately skipped: they exceed
+    // u64::MAX once cast, which would later trip the Swift-side Int.max guard and
+    // fail tokenizer creation. Returning None matches the practical effect of
+    // Python transformers' large-int sentinel — no truncation cap kicks in.
     value
         .as_u64()
         .or_else(|| value.as_i64().and_then(|value| u64::try_from(value).ok()))

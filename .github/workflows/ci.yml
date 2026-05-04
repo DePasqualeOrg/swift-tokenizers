@@ -11,20 +11,16 @@ permissions:
     contents: read
 
 jobs:
-    test:
-        name: Test (macOS)
+    test-pinned:
+        name: Test (pinned XCFramework)
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-            # Tests run only on macOS. Some tests download models from
-            # Hugging Face Hub, which requires URLSession. On Linux,
-            # FoundationNetworking crashes during URLSession teardown.
-            # See: https://github.com/swiftlang/swift-corelibs-foundation/issues/3675
             - name: Run tests
               run: swift test
 
-    test-rust:
-        name: Test Rust Backend (macOS)
+    test-from-source:
+        name: Test (Rust built from source)
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -44,30 +40,14 @@ jobs:
             - name: Build Rust XCFramework
               run: bash scripts/rust/build/build-rust-xcframework.sh
 
-            - name: Run Rust trait tests
+            - name: Run tests against locally built XCFramework
               env:
                   TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: Binaries/TokenizersRust.xcframework
               run: |
                   swift package clean
-                  swift test --traits Rust
-
-    build-linux:
-        name: Build (Linux)
-        runs-on: ubuntu-latest
-        container: swift:6.2.3
-        steps:
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-            - name: Build
-              run: swift build
-
-            - name: Build tests
-              run: swift build --build-tests
+                  swift test
 
     docs:
-        # macos-26 runs a Swift toolchain new enough for `swift package --traits`
-        # (added after swift build / swift test picked up the flag). macos-latest
-        # currently points at an older image that rejects it.
         name: Documentation
         runs-on: macos-26
         steps:

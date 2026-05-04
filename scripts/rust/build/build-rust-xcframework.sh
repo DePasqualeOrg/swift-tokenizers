@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-CRATE_DIR="${REPO_ROOT}/rust/swift-tokenizers-rust"
+CRATE_DIR="${REPO_ROOT}/rust"
 HEADERS_DIR="${CRATE_DIR}/include"
 OUTPUT_DIR="${REPO_ROOT}/Binaries/TokenizersRust.xcframework"
 INTERMEDIATES_DIR="${CRATE_DIR}/target/xcframework-intermediates"

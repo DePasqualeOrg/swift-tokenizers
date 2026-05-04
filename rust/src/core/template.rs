@@ -36,9 +36,16 @@ pub(crate) fn render(
     template: &str,
     context: &JsonValue,
 ) -> Result<String, CoreError> {
-    environment
-        .render_str(&normalize_template_source(template), context)
-        .map_err(|err| CoreError::ChatTemplate(err.to_string()))
+    let template_source = normalize_template_source(template);
+    let template = environment
+        .template_from_str(&template_source)
+        .map_err(|err| {
+            CoreError::ChatTemplate(format!("Failed to compile chat template: {err}"))
+        })?;
+
+    template
+        .render(context)
+        .map_err(|err| CoreError::ChatTemplate(format!("Failed to render chat template: {err}")))
 }
 
 // Matches `{% generation %}` / `{% endgeneration %}` in any whitespace-control variant.

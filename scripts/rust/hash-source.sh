@@ -14,7 +14,10 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 ALLOWLIST=(
-    rust/swift-tokenizers-rust
+    rust/Cargo.lock
+    rust/Cargo.toml
+    rust/include
+    rust/src
     rust-toolchain.toml
     scripts/rust/build
     .github/workflows/rust-release.yml

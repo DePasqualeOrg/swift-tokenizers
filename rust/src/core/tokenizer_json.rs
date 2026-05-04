@@ -84,7 +84,7 @@ fn normalize_added_tokens(tokenizer_data: &mut JsonValue) {
             .unwrap_or(false);
         // Mirror upstream `AddedToken::from`, which sets `normalized = !special` when the field
         // is absent. Defaulting `normalized=false` for non-special tokens would make them match
-        // raw input instead of normalized input, diverging from the Swift backend.
+        // raw input instead of normalized input.
         added_token
             .entry("normalized".to_owned())
             .or_insert(JsonValue::Bool(!special));
@@ -153,7 +153,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn offline_fixture_directory() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/TokenizersTests/Resources")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../Tests/TokenizersTests/Resources")
     }
 
     #[test]

@@ -64,7 +64,7 @@ jobs:
                   set -euo pipefail
 
                   swift package clean
-                  swift test --traits Rust
+                  swift test
 
             - name: Compute source hash
               id: source-hash
@@ -101,7 +101,7 @@ jobs:
                   print(
                       json.dumps(
                           {
-                              "hash_schema_version": 1,
+                              "hash_schema_version": 2,
                               "version": os.environ["VERSION"],
                               "git_commit": os.environ["GIT_COMMIT"],
                               "rust_toolchain": os.environ["RUST_TOOLCHAIN"],

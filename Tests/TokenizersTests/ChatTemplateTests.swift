@@ -21,14 +21,6 @@ private let tokenizerAndChatTemplateFiles = [
 private typealias TemplateMessage = Tokenizers.Message
 private typealias TemplateToolSpec = Tokenizers.ToolSpec
 
-private func backendValue<T>(swift: T, rust: T) -> T {
-    #if Rust
-    rust
-    #else
-    swift
-    #endif
-}
-
 private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
     let modelDirectory = try await hubClient.downloadSnapshot(
         of: model,
@@ -69,8 +61,8 @@ struct ChatTemplateTests {
     func templateFromConfig() async throws {
         let tokenizer = try await Self.sharedPhiTokenizer()
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
-        // Both backends now run the canonical tokenizer.json pipeline with no Llama
-        // shim, so encode / decode converge on the same output.
+        // The Rust path runs the canonical tokenizer.json pipeline with no Llama shim,
+        // so encode / decode converge on the same output.
         let encodedTarget = [32010, 20355, 915, 278, 14156, 8720, 4086, 29889, 32007, 32001]
         let decoded = tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<|user|> Describe the Swift programming language.<|end|><|assistant|>"
@@ -213,13 +205,7 @@ struct ChatTemplateTests {
             messages: messages, chatTemplate: whitespaceSensitiveTemplate
         )
         let decoded = tokenizer.decode(tokenIds: encoded)
-        let expected = backendValue(
-            swift: """
-                Describe the Swift programming language.
-                assistant
-                """,
-            rust: "Describe the Swift programming language.\nassistant\n"
-        )
+        let expected = "Describe the Swift programming language.\nassistant\n"
         #expect(decoded == expected)
         #expect(!decoded.hasPrefix("\n"))
         #expect(!decoded.contains("\n\n"))
@@ -424,9 +410,6 @@ struct ChatTemplateTests {
                 return
             }
             #expect(!message.isEmpty)
-            #if !Rust
-            #expect(message.hasPrefix("Failed to compile chat template"))
-            #endif
         } catch {
             Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
         }
@@ -450,9 +433,6 @@ struct ChatTemplateTests {
                 return
             }
             #expect(!message.isEmpty)
-            #if !Rust
-            #expect(message.hasPrefix("Failed to render chat template"))
-            #endif
         } catch {
             Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
         }

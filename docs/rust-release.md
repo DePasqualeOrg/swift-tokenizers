@@ -5,7 +5,7 @@ This document explains how the `rust-release.yml` workflow publishes new Rust XC
 ## How the pieces fit together
 
 - **`rust-release.yml`**: publishes a new Rust XCFramework as a GitHub release with four assets – the zip, its checksum, a machine-readable manifest, and release notes. The workflow is `workflow_dispatch`-only.
-- **`rust/Pin.json`**: a verbatim copy of the release manifest for the currently pinned version. `Package.swift` reads it at manifest evaluation time and uses `xcframework_url` and `checksum` to construct the `.binaryTarget`. There is no fallback – a missing, malformed, or schema-mismatched pin fails the build.
+- **`rust/Pin.json`**: a verbatim copy of the release manifest for the currently pinned version. `Package.swift` mirrors its `xcframework_url` and `checksum` values as literals because manifest-evaluation file I/O is unreliable for URL-based dependency consumers.
 - **CI drift guard** (`scripts/rust/release/check-pin.sh`): on every PR, recomputes the source hash and compares it against `Pin.json.source_hash_sha256`. On mismatch, CI fails with a message pointing at `cut-release.sh`.
 - **Pre-release pin guard** (`scripts/rust/release/check-prerelease-pin.sh`): on PRs targeting `main`, fails if `Pin.json.version` contains a `-` suffix, unless the repository variable `ALLOW_PRERELEASE_PIN=1` is set.
 - **`scripts/rust/release/cut-release.sh`**: the single maintainer command that drives the whole flow.
@@ -14,7 +14,7 @@ This document explains how the `rust-release.yml` workflow publishes new Rust XC
 
 The workflow is split into two jobs:
 
-- **`build-validate`**: verifies the dispatched commit matches `expected_commit`, builds the XCFramework, runs `swift test --traits Rust` against the freshly built artifact, computes the canonical source hash, writes the release manifest JSON, and uploads all four files (archive, checksum, manifest, release notes) as workflow artifacts. Runs under `contents: read`.
+- **`build-validate`**: verifies the dispatched commit matches `expected_commit`, builds the XCFramework, runs `swift test` against the freshly built artifact, computes the canonical source hash, writes the release manifest JSON, and uploads all four files (archive, checksum, manifest, release notes) as workflow artifacts. Runs under `contents: read`.
 - **`publish`**: downloads the workflow artifacts and creates the GitHub release via `gh release create --target "$GITHUB_SHA" ...`. Runs under `contents: write` and is gated by a GitHub Environment (`rust-release`) with the maintainer as a required reviewer.
 
 The split puts the approval prompt exactly at the write boundary. A failed build or a mismatched `expected_commit` fails the workflow before the publish job is ever queued for approval.
@@ -76,6 +76,6 @@ To merge a pre-release pin intentionally – for example, to validate the releas
 The `hash_schema_version` field exists so the hash input set can evolve without silently accepting stale pins. To bump it:
 
 1. Change `scripts/rust/hash-source.sh` (or whichever input set is changing).
-2. Bump `SUPPORTED_HASH_SCHEMA_VERSION` in `scripts/rust/release/check-pin.sh` and the `supportedHashSchemaVersion` constant in `Package.swift`.
+2. Bump `SUPPORTED_HASH_SCHEMA_VERSION` in `scripts/rust/release/check-pin.sh` and any other tooling that asserts the schema version.
 3. Merge the schema change.
-4. Cut a new Rust release on the new schema. Until that release is cut, the drift guard and `Package.swift` both fail because the existing pin's schema version is stale.
+4. Cut a new Rust release on the new schema. Until that release is cut, the drift guard fails because the existing pin's schema version is stale.
