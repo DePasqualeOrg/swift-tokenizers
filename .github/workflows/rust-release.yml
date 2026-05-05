@@ -57,6 +57,18 @@ jobs:
             - name: Package release artifact
               run: bash scripts/rust/build/package-rust-release.sh "${{ inputs.version }}"
 
+            - name: Verify committed UniFFI wrapper matches Rust source
+              # `package-rust-release.sh` already builds the static library and
+              # bindgen, so the drift check here is fast — it just regenerates
+              # into a temp dir, applies the same patch as
+              # `regenerate-wrapper.sh`, and diffs against
+              # `Sources/TokenizersFFI/Generated/TokenizersFFI.swift`. A
+              # nonzero diff fails the release before any artifact is published,
+              # so the manifest's `source_hash_sha256` always describes the
+              # source state at GITHUB_SHA. See `docs/uniffi-migration.md`
+              # § "Generated-wrapper drift integrity".
+              run: bash scripts/rust/check-wrapper-drift.sh
+
             - name: Validate local Rust artifact
               env:
                   TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: Binaries/TokenizersRust.xcframework
@@ -64,7 +76,7 @@ jobs:
                   set -euo pipefail
 
                   swift package clean
-                  swift test --traits Rust
+                  swift test
 
             - name: Compute source hash
               id: source-hash
@@ -101,7 +113,7 @@ jobs:
                   print(
                       json.dumps(
                           {
-                              "hash_schema_version": 1,
+                              "hash_schema_version": 2,
                               "version": os.environ["VERSION"],
                               "git_commit": os.environ["GIT_COMMIT"],
                               "rust_toolchain": os.environ["RUST_TOOLCHAIN"],

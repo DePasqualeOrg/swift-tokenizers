@@ -3,15 +3,6 @@ import Foundation
 import HFAPI
 import MLXLMCommon
 import Tokenizers
-import TokenizersCore
-
-#if Swift
-import TokenizersSwiftBackend
-#endif
-
-#if Rust
-import TokenizersRustBackend
-#endif
 
 private enum SubsystemBenchmarkDefaults {
     static let configuration = MLXLMCommon.ModelConfiguration(id: "mlx-community/Qwen3-0.6B-4bit")
@@ -82,22 +73,12 @@ func benchmarkSidecarLoading(
         useLatest: useLatest
     )
 
-    #if Rust
     _ = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-    #elseif Swift
-    _ = try SwiftAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-    #else
-    #error("No tokenizer backend selected")
-    #endif
 
     var times: [Double] = []
     for i in 1...runs {
         let start = CFAbsoluteTimeGetCurrent()
-        #if Rust
         _ = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-        #elseif Swift
-        _ = try SwiftAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
-        #endif
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
         times.append(elapsed)
         print("Sidecar load run \(i): \(String(format: "%.1f", elapsed))ms")
@@ -118,36 +99,19 @@ func benchmarkTokenizerCoreLoading(
         useLatest: useLatest
     )
 
-    #if Rust
     let runtimeConfiguration = try RustAutoTokenizerDirectoryLoader.loadRuntimeConfiguration(from: tokenizerDirectory)
     _ = try await RustAutoTokenizerDirectoryLoader.loadTokenizerCore(
         from: tokenizerDirectory,
         runtimeConfiguration: runtimeConfiguration
     )
-    #elseif Swift
-    let tokenizerConfig = try SwiftAutoTokenizerDirectoryLoader.loadTokenizerConfig(from: tokenizerDirectory)
-    _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
-        from: tokenizerDirectory,
-        tokenizerConfig: tokenizerConfig
-    )
-    #else
-    #error("No tokenizer backend selected")
-    #endif
 
     var times: [Double] = []
     for i in 1...runs {
         let start = CFAbsoluteTimeGetCurrent()
-        #if Rust
         _ = try await RustAutoTokenizerDirectoryLoader.loadTokenizerCore(
             from: tokenizerDirectory,
             runtimeConfiguration: runtimeConfiguration
         )
-        #elseif Swift
-        _ = try await SwiftAutoTokenizerDirectoryLoader.loadTokenizerCore(
-            from: tokenizerDirectory,
-            tokenizerConfig: tokenizerConfig
-        )
-        #endif
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
         times.append(elapsed)
         print("Tokenizer core load run \(i): \(String(format: "%.1f", elapsed))ms")

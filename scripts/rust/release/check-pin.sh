@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SUPPORTED_HASH_SCHEMA_VERSION=1
+SUPPORTED_HASH_SCHEMA_VERSION=2
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"

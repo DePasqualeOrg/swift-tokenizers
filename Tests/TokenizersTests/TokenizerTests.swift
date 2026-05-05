@@ -7,15 +7,6 @@ import HFAPI
 import Testing
 
 @testable import Tokenizers
-@testable import TokenizersCore
-
-#if Swift
-@testable import TokenizersSwiftBackend
-#endif
-
-#if Rust
-@testable import TokenizersRustBackend
-#endif
 
 private let downloadDestination: URL = {
     let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -65,14 +56,6 @@ private func loadEdgeCases(for hubModelName: String) throws -> [EdgeCase]? {
 }
 
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
-
-private func backendValue<T>(swift: T, rust: T) -> T {
-    #if Rust
-    rust
-    #else
-    swift
-    #endif
-}
 
 private func downloadModel(_ modelName: String) async throws -> URL {
     guard let repoId = Repo.ID(rawValue: modelName) else {
@@ -146,13 +129,15 @@ struct TokenizerTests {
         // Unknown token checks. `tokenizer.unknownTokenId` composes the
         // sidecar-style fallback (`tokenizer_config.json.unk_token` first, then
         // the model's own `unk_token`), matching Python's user-facing
-        // `tokenizer.unk_token_id`. The underlying `model.unknownTokenId` is the
-        // model's own field only (e.g. nil for Whisper, whose
+        // `tokenizer.unk_token_id`. The underlying `rustTokenizer.unknownTokenId`
+        // is the model's own field only (e.g. nil for Whisper, whose
         // `tokenizer.json.model.unk_token` is null).
         #expect(tokenizer.unknownTokenId == spec.unknownTokenId)
-        if let modelUnknownId = tokenizer.model.unknownTokenId {
-            #expect(modelUnknownId == tokenizer.model.convertTokenToId("_this_token_does_not_exist_"))
-            #expect(tokenizer.model.unknownToken == tokenizer.model.convertIdToToken(modelUnknownId))
+        // `convertTokenToId` reports vocabulary membership; missing tokens
+        // resolve to `nil` rather than the unk id.
+        #expect(tokenizer.rustTokenizer.convertTokenToId("_this_token_does_not_exist_") == nil)
+        if let modelUnknownId = tokenizer.rustTokenizer.unknownTokenId {
+            #expect(tokenizer.rustTokenizer.unknownToken == tokenizer.rustTokenizer.convertIdToToken(modelUnknownId))
         }
     }
 
@@ -181,17 +166,77 @@ struct TokenizerTests {
         #expect(tokenizer.convertIdToToken(235345) == "#")
 
         // Verifies all expected entries are parsed
-        #if Rust
-        #expect((tokenizer.model as? RustProxyModel)?.vocabCount == 256_000)
-        #else
-        #expect((tokenizer.model as? BPETokenizer)?.vocabCount == 256_000)
-        #endif
+        #expect(tokenizer.getVocabSize(withAddedTokens: true) == 256_000)
 
         // Test added tokens
         let inputIds = tokenizer("This\n\nis\na\ntest.")
         #expect(inputIds == [2, 1596, 109, 502, 108, 235250, 108, 2195, 235265])
         let decoded = tokenizer.decode(tokenIds: inputIds)
         #expect(decoded == "<bos>This\n\nis\na\ntest.")
+    }
+
+    /// Pins both flavors of `getVocabSize` against a tokenizer whose added vocabulary
+    /// is non-empty, so the `withAddedTokens: false` and `withAddedTokens: true` results
+    /// differ. Llama 3.2 has a 128_000-entry base vocabulary and 256 added reserved
+    /// special tokens, matching `tokenizer.vocab_size` and `len(tokenizer)` in the
+    /// Hugging Face Python library.
+    @Test
+    func llama3VocabSize() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "pcuenq/Llama-3.2-1B-Instruct-tokenizer")
+        #expect(tokenizer.getVocabSize(withAddedTokens: false) == 128_000)
+        #expect(tokenizer.getVocabSize(withAddedTokens: true) == 128_256)
+    }
+
+    /// Verifies sentence-pair (`Dual`) input flows through the protocol and returns an
+    /// encoding with both sequences distinguishable. DistilBERT's WordPiece + post-processor
+    /// produces `[CLS] A [SEP] B [SEP]` and assigns `sequence_ids` of `[None, 0, 0, 0, None, 1, 1, 1, None]`.
+    /// Expected values cross-checked against the upstream Hugging Face `tokenizers` Python bindings.
+    @Test
+    func pairInputEncoding() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "distilbert/distilbert-base-multilingual-cased")
+        let encoding = try tokenizer.encodeWithMetadata(
+            text: "Sequence A",
+            textPair: "Sequence B",
+            addSpecialTokens: true,
+            offsetUnit: .unicodeScalar
+        )
+        #expect(encoding.tokenIds == [101, 11045, 72494, 138, 102, 11045, 72494, 139, 102])
+        #expect(encoding.sequenceCount == 2)
+        #expect(encoding.sequenceIndices == [nil, 0, 0, 0, nil, 1, 1, 1, nil])
+        #expect(encoding.tokenTypeIds == [0, 0, 0, 0, 0, 1, 1, 1, 1])
+
+        // Fast pair encode returns just the IDs.
+        let ids = tokenizer.encode(text: "Sequence A", textPair: "Sequence B", addSpecialTokens: true)
+        #expect(ids == encoding.tokenIds)
+    }
+
+    /// Verifies batch encoding produces the same IDs as encoding each input individually,
+    /// and that the metadata-rich batch path returns one ``TokenizerEncoding`` per input.
+    @Test
+    func batchEncoding() async throws {
+        let tokenizer = try await makeTokenizer(hubModelName: "distilbert/distilbert-base-multilingual-cased")
+        let texts = ["hello", "world goodbye"]
+        let batch = tokenizer.encodeBatch(texts: texts, addSpecialTokens: true)
+        #expect(batch.count == texts.count)
+        for (index, text) in texts.enumerated() {
+            #expect(batch[index] == tokenizer.encode(text: text, addSpecialTokens: true))
+        }
+
+        let metadataBatch = try tokenizer.encodeBatchWithMetadata(
+            texts: texts,
+            addSpecialTokens: true,
+            offsetUnit: .unicodeScalar
+        )
+        #expect(metadataBatch.count == texts.count)
+        for (index, text) in texts.enumerated() {
+            let single = try tokenizer.encodeWithMetadata(
+                text: text,
+                addSpecialTokens: true,
+                offsetUnit: .unicodeScalar
+            )
+            #expect(metadataBatch[index].tokenIds == single.tokenIds)
+            #expect(metadataBatch[index].sequenceIndices == single.sequenceIndices)
+        }
     }
 
     @Test

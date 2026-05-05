@@ -1,0 +1,13 @@
+# UniFFI Swift bindgen configuration. Field names follow the Swift bindings
+# `Config` struct in `uniffi_bindgen::bindings::swift::gen_swift::Config`.
+#
+# `module_name` is the namespace UniFFI uses when generating the Swift wrapper
+# file and is also the SwiftPM target that holds the wrapper. `ffi_module_name`
+# is the C module declared in the generated modulemap and imported by the
+# wrapper; pinning it to the existing SwiftPM `binaryTarget` name
+# (`TokenizersRust`) keeps the binary target unchanged.
+
+[bindings.swift]
+module_name = "TokenizersFFI"
+ffi_module_name = "TokenizersRust"
+ffi_module_filename = "TokenizersRust"

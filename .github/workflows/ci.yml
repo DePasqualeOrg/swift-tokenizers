@@ -11,20 +11,16 @@ permissions:
     contents: read
 
 jobs:
-    test:
-        name: Test (macOS)
+    test-pinned:
+        name: Test (pinned XCFramework)
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-            # Tests run only on macOS. Some tests download models from
-            # Hugging Face Hub, which requires URLSession. On Linux,
-            # FoundationNetworking crashes during URLSession teardown.
-            # See: https://github.com/swiftlang/swift-corelibs-foundation/issues/3675
             - name: Run tests
               run: swift test
 
-    test-rust:
-        name: Test Rust Backend (macOS)
+    test-from-source:
+        name: Test (Rust built from source)
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -44,32 +40,70 @@ jobs:
             - name: Build Rust XCFramework
               run: bash scripts/rust/build/build-rust-xcframework.sh
 
-            - name: Run Rust trait tests
+            - name: Run tests against locally built XCFramework
               env:
                   TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: Binaries/TokenizersRust.xcframework
               run: |
                   swift package clean
-                  swift test --traits Rust
+                  swift test
 
-    build-linux:
-        name: Build (Linux)
+    wrapper-drift-changes:
+        # Detects whether the PR touched any input that influences the generated
+        # UniFFI wrapper, so the (expensive) `wrapper-drift` job below can be
+        # skipped on PRs that only touch unrelated paths.
+        name: Detect wrapper-drift inputs
         runs-on: ubuntu-latest
-        container: swift:6.2.3
+        outputs:
+            should-run: ${{ steps.filter.outputs.relevant }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-            - name: Build
-              run: swift build
+            - id: filter
+              uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+              with:
+                  filters: |
+                      relevant:
+                          - 'rust/**'
+                          - 'rust-toolchain.toml'
+                          - 'Sources/TokenizersFFI/Generated/**'
+                          - 'scripts/rust/**'
+                          - '.github/workflows/ci.yml'
 
-            - name: Build tests
-              run: swift build --build-tests
+    wrapper-drift:
+        # Confirms the committed UniFFI wrapper at
+        # `Sources/TokenizersFFI/Generated/TokenizersFFI.swift` still matches what
+        # the bindgen would emit for the current Rust source. The check rebuilds
+        # only the host static library and the bindgen binary (no per-target
+        # matrix, no xcframework), but is still gated by `wrapper-drift-changes`
+        # on PRs that don't touch the relevant inputs to skip the cargo build
+        # entirely. `push` and `workflow_dispatch` always run the check.
+        name: UniFFI wrapper drift
+        runs-on: macos-latest
+        needs: wrapper-drift-changes
+        if: |
+            github.event_name != 'pull_request'
+            || needs.wrapper-drift-changes.outputs.should-run == 'true'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Read Rust toolchain version
+              id: rust-toolchain
+              run: |
+                  version=$(awk -F'"' '/^channel/ {print $2; exit}' rust-toolchain.toml)
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+              with:
+                  toolchain: ${{ steps.rust-toolchain.outputs.version }}
+                  targets: aarch64-apple-darwin
+
+            - name: Verify generated wrapper matches committed copy
+              run: bash scripts/rust/check-wrapper-drift.sh
 
     docs:
-        # macos-26 runs a Swift toolchain new enough for `swift package --traits`
-        # (added after swift build / swift test picked up the flag). macos-latest
-        # currently points at an older image that rejects it.
         name: Documentation
-        runs-on: macos-26
+        runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -82,7 +116,7 @@ jobs:
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-            - run: swift format lint --strict --recursive .
+            - run: scripts/swift-format.sh
 
             - name: Suggest fixes (if check fails)
               if: failure()
@@ -90,8 +124,7 @@ jobs:
                   echo "### Here's how to fix the formatting locally:" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo '```bash' >> $GITHUB_STEP_SUMMARY
-                  echo "# Format all Swift files" >> $GITHUB_STEP_SUMMARY
-                  echo 'swift format -i --recursive .' >> $GITHUB_STEP_SUMMARY
+                  echo 'scripts/swift-format.sh --fix' >> $GITHUB_STEP_SUMMARY
                   echo '```' >> $GITHUB_STEP_SUMMARY
 
     rust-pin-guard:

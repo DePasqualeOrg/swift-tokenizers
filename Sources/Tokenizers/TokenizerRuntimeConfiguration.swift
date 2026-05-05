@@ -4,6 +4,11 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
     package struct NamedChatTemplate: Codable, Hashable, Sendable {
         package let name: String
         package let template: String
+
+        package init(name: String, template: String) {
+            self.name = name
+            self.template = template
+        }
     }
 
     package enum ChatTemplateSource: Codable, Hashable, Sendable {
@@ -62,18 +67,30 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
     package let modelMaxLength: Int?
     package let chatTemplate: ChatTemplateSource
 
-    package init(tokenizerConfig: Config) {
-        bosToken = tokenizerConfig.bosToken.tokenString
-        eosToken = tokenizerConfig.eosToken.tokenString
-        unknownToken = tokenizerConfig.unkToken.tokenString
-        sepToken = tokenizerConfig.sepToken.tokenString
-        padToken = tokenizerConfig.padToken.tokenString
-        clsToken = tokenizerConfig.clsToken.tokenString
-        maskToken = tokenizerConfig.maskToken.tokenString
-        additionalSpecialTokens = tokenizerConfig.additionalSpecialTokens.array(or: []).compactMap(\.tokenString)
-        cleanUpTokenizationSpaces = tokenizerConfig.cleanUpTokenizationSpaces.boolean(or: true)
-        modelMaxLength = tokenizerConfig.modelMaxLength.integer()
-        chatTemplate = TokenizerRuntimeConfiguration.chatTemplateSource(from: tokenizerConfig.chatTemplate)
+    package init(
+        bosToken: String?,
+        eosToken: String?,
+        unknownToken: String?,
+        sepToken: String?,
+        padToken: String?,
+        clsToken: String?,
+        maskToken: String?,
+        additionalSpecialTokens: [String],
+        cleanUpTokenizationSpaces: Bool,
+        modelMaxLength: Int?,
+        chatTemplate: ChatTemplateSource
+    ) {
+        self.bosToken = bosToken
+        self.eosToken = eosToken
+        self.unknownToken = unknownToken
+        self.sepToken = sepToken
+        self.padToken = padToken
+        self.clsToken = clsToken
+        self.maskToken = maskToken
+        self.additionalSpecialTokens = additionalSpecialTokens
+        self.cleanUpTokenizationSpaces = cleanUpTokenizationSpaces
+        self.modelMaxLength = modelMaxLength
+        self.chatTemplate = chatTemplate
     }
 
     package var hasChatTemplate: Bool {
@@ -84,7 +101,7 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
     }
 
     package func selectedChatTemplate(
-        chatTemplate argument: ChatTemplateArgument?,
+        chatTemplate argument: ChatTemplateOverride?,
         tools: [ToolSpec]?
     ) throws -> String {
         if let argument, case let .literal(template) = argument {
@@ -175,25 +192,5 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
         case (nil, nil):
             return nil
         }
-    }
-
-    private static func chatTemplateSource(from config: Config) -> ChatTemplateSource {
-        if let templates = config.array() {
-            let namedTemplates = templates.compactMap { item -> NamedChatTemplate? in
-                guard let name = item["name"].string(), let template = item["template"].string() else {
-                    return nil
-                }
-                return NamedChatTemplate(name: name, template: template)
-            }
-            if !namedTemplates.isEmpty {
-                return .named(namedTemplates)
-            }
-        }
-
-        if let template = config.string() {
-            return .literal(template)
-        }
-
-        return .none
     }
 }

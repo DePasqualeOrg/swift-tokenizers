@@ -30,8 +30,8 @@ def main() -> None:
     args = parser.parse_args()
 
     repo_root = pathlib.Path(args.repo_root).resolve()
-    cargo_toml_path = repo_root / "rust" / "swift-tokenizers-rust" / "Cargo.toml"
-    cargo_lock_path = repo_root / "rust" / "swift-tokenizers-rust" / "Cargo.lock"
+    cargo_toml_path = repo_root / "rust" / "Cargo.toml"
+    cargo_lock_path = repo_root / "rust" / "Cargo.lock"
 
     cargo_toml = tomllib.loads(cargo_toml_path.read_text())
     cargo_lock = tomllib.loads(cargo_lock_path.read_text())

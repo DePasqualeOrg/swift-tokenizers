@@ -1,4 +1,0 @@
-module TokenizersRust {
-    header "TokenizersRust.h"
-    export *
-}
