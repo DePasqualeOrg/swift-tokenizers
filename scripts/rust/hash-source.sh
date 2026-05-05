@@ -16,10 +16,12 @@ cd "$(git rev-parse --show-toplevel)"
 ALLOWLIST=(
     rust/Cargo.lock
     rust/Cargo.toml
-    rust/include
     rust/src
+    rust/uniffi.toml
     rust-toolchain.toml
+    Sources/TokenizersFFI/Generated
     scripts/rust/build
+    scripts/rust/regenerate-wrapper.sh
     .github/workflows/rust-release.yml
 )
 

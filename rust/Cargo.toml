@@ -9,6 +9,11 @@ publish = false
 name = "tokenizers_rust"
 crate-type = ["staticlib"]
 
+[[bin]]
+name = "uniffi-bindgen-swift"
+path = "src/bin/uniffi-bindgen-swift.rs"
+required-features = ["uniffi-cli"]
+
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 minijinja = { version = "2.19.0", default-features = false, features = ["adjacent_loop_items", "builtins", "deserialization", "json", "loop_controls", "macros", "multi_template", "serde", "std_collections"] }
@@ -18,6 +23,12 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
+uniffi = { version = "0.31.1", default-features = false }
+
+[features]
+# Enables the `uniffi-bindgen-swift` binary entry point. Activates `cargo-metadata`
+# so the bindgen auto-discovers `rust/uniffi.toml` from the crate root.
+uniffi-cli = ["uniffi/cli", "uniffi/cargo-metadata"]
 
 [profile.release]
 opt-level = 3
@@ -25,3 +36,22 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# UniFFI 0.31.x's Swift bindgen emits `String(bytes:encoding:.utf8)!` for the
+# `FfiConverterString` lift/read paths. That goes through Foundation's NSString
+# decoder, which silently strips a leading U+FEFF byte order mark on UTF-8
+# input — corrupting BOM-prefixed vocabulary entries (e.g. Gemma id 122661).
+# We pin to a fork that uses Swift's native `String(decoding:as:UTF8.self)`
+# instead.
+# TODO: drop this entire `[patch.crates-io]` block and bump the `uniffi`
+# version in `[dependencies]` once mozilla/uniffi-rs#2889 (the BOM fix) is
+# included in a uniffi-rs release.
+[patch.crates-io]
+uniffi = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_bindgen = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_core = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_meta = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_pipeline = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_udl = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }
+uniffi_internal_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "b01730c0db3f8150c2aad994ee8f2c1275a6bf13" }

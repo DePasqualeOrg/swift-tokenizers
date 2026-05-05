@@ -54,10 +54,22 @@ let tokenizersRustTarget: Target =
 
 var packageTargets: [Target] = [
     tokenizersRustTarget,
+    // Holds the UniFFI-generated Swift wrapper. Not in `products` — its public
+    // declarations stay invisible to consumers of the `Tokenizers` library so
+    // the public Swift API surface is unaffected. The committed wrapper lives
+    // at `Sources/TokenizersFFI/Generated/<wrapper>.swift` and is regenerated
+    // by `scripts/rust/regenerate-wrapper.sh`.
+    .target(
+        name: "TokenizersFFI",
+        dependencies: [
+            .target(name: "TokenizersRust")
+        ],
+        path: "Sources/TokenizersFFI"
+    ),
     .target(
         name: "Tokenizers",
         dependencies: [
-            .target(name: "TokenizersRust")
+            .target(name: "TokenizersFFI")
         ],
         path: "Sources/Tokenizers"
     ),
@@ -65,6 +77,7 @@ var packageTargets: [Target] = [
         name: "TokenizersTests",
         dependencies: [
             "Tokenizers",
+            "TokenizersFFI",
             .product(name: "HFAPI", package: "swift-hf-api"),
         ],
         resources: [.process("Resources")]

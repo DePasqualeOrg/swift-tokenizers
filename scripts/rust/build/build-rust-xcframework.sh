@@ -4,9 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 CRATE_DIR="${REPO_ROOT}/rust"
-HEADERS_DIR="${CRATE_DIR}/include"
 OUTPUT_DIR="${REPO_ROOT}/Binaries/TokenizersRust.xcframework"
 INTERMEDIATES_DIR="${CRATE_DIR}/target/xcframework-intermediates"
+HEADERS_DIR="${CRATE_DIR}/target/xcframework-headers"
+UNIFFI_BINDINGS_DIR="${CRATE_DIR}/target/uniffi-bindings"
 LOCKFILE_PATH="${CRATE_DIR}/Cargo.lock"
 TOOLCHAIN_FILE="${REPO_ROOT}/rust-toolchain.toml"
 
@@ -52,6 +53,20 @@ for target in "${TARGETS[@]}"; do
     --release \
     --target "${target}"
 done
+
+# Generate the bindgen artifacts (Swift wrapper, C header, modulemap) into
+# `${UNIFFI_BINDINGS_DIR}`. The bindgen-only script reuses the host static
+# library we just built above — its own `cargo build` invocation is a no-op
+# with a warm target dir.
+bash "${SCRIPT_DIR}/build-uniffi-bindings.sh"
+
+# Stage just the C header + modulemap so xcodebuild's `-headers` argument
+# doesn't pick up the generated Swift wrapper that lives next to them in
+# `${UNIFFI_BINDINGS_DIR}`.
+rm -rf "${HEADERS_DIR}"
+mkdir -p "${HEADERS_DIR}"
+cp "${UNIFFI_BINDINGS_DIR}/TokenizersRust.h" "${HEADERS_DIR}/TokenizersRust.h"
+cp "${UNIFFI_BINDINGS_DIR}/module.modulemap" "${HEADERS_DIR}/module.modulemap"
 
 rm -rf "${OUTPUT_DIR}"
 rm -rf "${INTERMEDIATES_DIR}"

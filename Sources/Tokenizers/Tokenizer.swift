@@ -10,7 +10,7 @@ public typealias Message = [String: any Sendable]
 public typealias ToolSpec = [String: any Sendable]
 
 /// Errors that can occur during tokenizer operations.
-public enum TokenizerError: LocalizedError, Equatable {
+public enum TokenizerError: LocalizedError, Equatable, Sendable {
     case missingConfig
     case chatTemplate(String)
     case missingChatTemplate
@@ -331,7 +331,7 @@ public struct TokenizerEncoding: Codable, Equatable, Sendable {
 }
 
 /// Overrides for selecting which chat template to use when applying chat formatting.
-public enum ChatTemplateOverride {
+public enum ChatTemplateOverride: Sendable {
     /// A Jinja template to use for the conversation.
     ///
     /// Normally it is not necessary to provide a template, since it will be read from the tokenizer config.

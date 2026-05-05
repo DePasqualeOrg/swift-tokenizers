@@ -15,28 +15,14 @@ pub(crate) struct TokenizerCore {
     pub(crate) metadata: TokenizerMetadata,
 }
 
-/// Discriminant values cross the FFI boundary as `u8`. Keep in sync with the
-/// Swift `OffsetUnit` ↔ raw-value bridge in `RustTokenizer.swift`.
+/// Selects which addressing scheme `EncodingMetadata::offsets` uses. The
+/// FFI-facing UniFFI enum (`core::uniffi_api::OffsetUnit`) translates to and
+/// from this internal type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[repr(u8)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum EncodingOffsetUnit {
-    Utf8 = 0,
-    UnicodeScalar = 1,
-}
-
-impl TryFrom<u8> for EncodingOffsetUnit {
-    type Error = CoreError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            value if value == Self::Utf8 as u8 => Ok(Self::Utf8),
-            value if value == Self::UnicodeScalar as u8 => Ok(Self::UnicodeScalar),
-            _ => Err(CoreError::MismatchedConfig(format!(
-                "Unsupported offset unit: {value}"
-            ))),
-        }
-    }
+    Utf8,
+    UnicodeScalar,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
