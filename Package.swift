@@ -16,7 +16,7 @@ let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
 let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH"]
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.2.0")
+    .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.3.0")
 ]
 
 // The Benchmarks target pulls in mlx-swift-lm, which is macOS-only and
