@@ -12,8 +12,8 @@ Load a tokenizer from a local directory containing `tokenizer.json` and any side
 import Tokenizers
 
 let tokenizer = try await AutoTokenizer.from(directory: localDirectory)
-let tokenIds = tokenizer.encode(text: "The quick brown fox")
-let text = tokenizer.decode(tokenIds: tokenIds)
+let tokenIds = try tokenizer.encode(text: "The quick brown fox")
+let text = try tokenizer.decode(tokenIds: tokenIds)
 ```
 
 For richer encoding metadata – token strings, masks, sequence indices, word indices, offset spans – use ``Tokenizer/encodeWithMetadata(text:addSpecialTokens:offsetUnit:)``:

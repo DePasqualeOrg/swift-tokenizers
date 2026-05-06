@@ -113,16 +113,16 @@ struct TokenizerTests {
         let tokenizer = try await makeTokenizer(hubModelName: spec.hubModelName)
         let dataset = try loadDataset(filename: spec.encodedSamplesFilename)
 
-        #expect(tokenizer.tokenize(text: dataset.text) == dataset.bpe_tokens)
-        #expect(tokenizer.encode(text: dataset.text) == dataset.token_ids)
-        #expect(tokenizer.decode(tokenIds: dataset.token_ids) == dataset.decoded_text)
+        #expect(try tokenizer.tokenize(text: dataset.text) == dataset.bpe_tokens)
+        #expect(try tokenizer.encode(text: dataset.text) == dataset.token_ids)
+        #expect(try tokenizer.decode(tokenIds: dataset.token_ids) == dataset.decoded_text)
 
         // Edge cases (if available)
         if let edgeCases = try? loadEdgeCases(for: spec.hubModelName) {
             for edgeCase in edgeCases {
-                #expect(tokenizer.encode(text: edgeCase.input) == edgeCase.encoded.input_ids)
-                #expect(tokenizer.decode(tokenIds: edgeCase.encoded.input_ids) == edgeCase.decoded_with_special)
-                #expect(tokenizer.decode(tokenIds: edgeCase.encoded.input_ids, skipSpecialTokens: true) == edgeCase.decoded_without_special)
+                #expect(try tokenizer.encode(text: edgeCase.input) == edgeCase.encoded.input_ids)
+                #expect(try tokenizer.decode(tokenIds: edgeCase.encoded.input_ids) == edgeCase.decoded_with_special)
+                #expect(try tokenizer.decode(tokenIds: edgeCase.encoded.input_ids, skipSpecialTokens: true) == edgeCase.decoded_without_special)
             }
         }
 
@@ -155,7 +155,7 @@ struct TokenizerTests {
         ]
         let expected = [217138, 1305]
         for (s, expected) in zip(cases, expected) {
-            let encoded = tokenizer.encode(text: " " + s)
+            let encoded = try tokenizer.encode(text: " " + s)
             #expect(encoded == [2, expected])
         }
 
@@ -169,9 +169,9 @@ struct TokenizerTests {
         #expect(tokenizer.getVocabSize(withAddedTokens: true) == 256_000)
 
         // Test added tokens
-        let inputIds = tokenizer("This\n\nis\na\ntest.")
+        let inputIds = try tokenizer("This\n\nis\na\ntest.")
         #expect(inputIds == [2, 1596, 109, 502, 108, 235250, 108, 2195, 235265])
-        let decoded = tokenizer.decode(tokenIds: inputIds)
+        let decoded = try tokenizer.decode(tokenIds: inputIds)
         #expect(decoded == "<bos>This\n\nis\na\ntest.")
     }
 
@@ -206,7 +206,7 @@ struct TokenizerTests {
         #expect(encoding.tokenTypeIds == [0, 0, 0, 0, 0, 1, 1, 1, 1])
 
         // Fast pair encode returns just the IDs.
-        let ids = tokenizer.encode(text: "Sequence A", textPair: "Sequence B", addSpecialTokens: true)
+        let ids = try tokenizer.encode(text: "Sequence A", textPair: "Sequence B", addSpecialTokens: true)
         #expect(ids == encoding.tokenIds)
     }
 
@@ -216,10 +216,11 @@ struct TokenizerTests {
     func batchEncoding() async throws {
         let tokenizer = try await makeTokenizer(hubModelName: "distilbert/distilbert-base-multilingual-cased")
         let texts = ["hello", "world goodbye"]
-        let batch = tokenizer.encodeBatch(texts: texts, addSpecialTokens: true)
+        let batch = try tokenizer.encodeBatch(texts: texts, addSpecialTokens: true)
         #expect(batch.count == texts.count)
         for (index, text) in texts.enumerated() {
-            #expect(batch[index] == tokenizer.encode(text: text, addSpecialTokens: true))
+            let single = try tokenizer.encode(text: text, addSpecialTokens: true)
+            #expect(batch[index] == single)
         }
 
         let metadataBatch = try tokenizer.encodeBatchWithMetadata(
@@ -246,9 +247,9 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.encode(text: "hello") == [15339])
-        #expect(tokenizer.encode(text: "hello world") == [15339, 1917])
-        #expect(tokenizer.encode(text: "<|im_start|>user<|im_sep|>Who are you?<|im_end|><|im_start|>assistant<|im_sep|>") == [100264, 882, 100266, 15546, 527, 499, 30, 100265, 100264, 78191, 100266])
+        #expect(try tokenizer.encode(text: "hello") == [15339])
+        #expect(try tokenizer.encode(text: "hello world") == [15339, 1917])
+        #expect(try tokenizer.encode(text: "<|im_start|>user<|im_sep|>Who are you?<|im_end|><|im_start|>assistant<|im_sep|>") == [100264, 882, 100266, 15546, 527, 499, 30, 100265, 100264, 78191, 100266])
     }
 
     /// Compact hub-integration coverage for model families on Python transformers
@@ -258,9 +259,9 @@ struct TokenizerTests {
     @Test
     func qwen25() async throws {
         let tokenizer = try await makeTokenizer(hubModelName: "Qwen/Qwen2.5-0.5B-Instruct")
-        #expect(tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
+        #expect(try tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
         #expect(
-            tokenizer.encode(text: "<|im_start|>user\nHello<|im_end|>")
+            try tokenizer.encode(text: "<|im_start|>user\nHello<|im_end|>")
                 == [151644, 872, 198, 9707, 151645]
         )
     }
@@ -268,13 +269,13 @@ struct TokenizerTests {
     @Test
     func modernBert() async throws {
         let tokenizer = try await makeTokenizer(hubModelName: "answerdotai/ModernBERT-base")
-        #expect(tokenizer.encode(text: "Hello world") == [50281, 12092, 1533, 50282])
+        #expect(try tokenizer.encode(text: "Hello world") == [50281, 12092, 1533, 50282])
     }
 
     @Test
     func gemma2() async throws {
         let tokenizer = try await makeTokenizer(hubModelName: "mlx-community/gemma-2-2b-it-4bit")
-        #expect(tokenizer.encode(text: "Who are you?") == [2, 6571, 708, 692, 235336])
+        #expect(try tokenizer.encode(text: "Who are you?") == [2, 6571, 708, 692, 235336])
     }
 
     @Test
@@ -282,13 +283,13 @@ struct TokenizerTests {
         let tokenizer = try await makeTokenizer(
             hubModelName: "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
         )
-        #expect(tokenizer.encode(text: "Who are you?") == [1, 7294, 1228, 1136, 29572])
+        #expect(try tokenizer.encode(text: "Who are you?") == [1, 7294, 1228, 1136, 29572])
     }
 
     @Test
     func ayaExpanse() async throws {
         let tokenizer = try await makeTokenizer(hubModelName: "mlx-community/aya-expanse-8b-4bit")
-        #expect(tokenizer.encode(text: "Who are you?") == [5, 33668, 1955, 1933, 38])
+        #expect(try tokenizer.encode(text: "Who are you?") == [5, 33668, 1955, 1933, 38])
     }
 
     @Test
@@ -310,7 +311,7 @@ struct TokenizerTests {
 
         let tokenizer = try await AutoTokenizer.from(directory: tokenizerConfigURL.deletingLastPathComponent())
 
-        let encoded = tokenizer.encode(text: "offline path")
+        let encoded = try tokenizer.encode(text: "offline path")
         #expect(!encoded.isEmpty)
     }
 
@@ -322,7 +323,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        let inputIds = tokenizer(" Hi")
+        let inputIds = try tokenizer(" Hi")
         #expect(inputIds == [1, 29871, 6324])
     }
 
@@ -334,7 +335,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        let ids = tokenizer.encode(text: "query: how much protein should a female eat")
+        let ids = try tokenizer.encode(text: "query: how much protein should a female eat")
         let expected = [0, 41, 1294, 12, 3642, 5045, 21308, 5608, 10, 117776, 73203, 2]
         #expect(ids == expected)
     }
@@ -347,7 +348,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        let ids = tokenizer.encode(text: "okay so lets get started")
+        let ids = try tokenizer.encode(text: "okay so lets get started")
         let expected = [0, 68403, 221, 2633, 7, 2046, 26859, 2]
         #expect(ids == expected)
     }
@@ -359,7 +360,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        let ids = tokenizer.encode(text: "okay so lets get started")
+        let ids = try tokenizer.encode(text: "okay so lets get started")
         let expected = [0, 68403, 221, 2633, 7, 2046, 26859, 2]
         #expect(ids == expected)
     }
@@ -371,7 +372,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        let ids = tokenizer.encode(text: "Why did the chicken cross the road?")
+        let ids = try tokenizer.encode(text: "Why did the chicken cross the road?")
         let expected = [256047, 24185, 4077, 349, 1001, 22690, 83580, 349, 82801, 248130, 2]
         #expect(ids == expected)
     }
@@ -391,7 +392,7 @@ struct TokenizerTests {
         let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
-        #expect(tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
+        #expect(try tokenizer.encode(text: "Who are you?") == [15191, 525, 498, 30])
     }
 
     /// Some Llama tokenizers already use a bos-prepending Template post-processor
@@ -401,7 +402,7 @@ struct TokenizerTests {
         let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
-        #expect(tokenizer.encode(text: "Who are you?") == [1, 11644, 526, 366, 29973])
+        #expect(try tokenizer.encode(text: "Who are you?") == [1, 11644, 526, 366, 29973])
     }
 
     @Test
@@ -418,8 +419,8 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.encode(text: "mąka") == [101, 181, 102075, 10113, 102])
-        #expect(tokenizer.tokenize(text: "Car") == ["Car"])
+        #expect(try tokenizer.encode(text: "mąka") == [101, 181, 102075, 10113, 102])
+        #expect(try tokenizer.tokenize(text: "Car") == ["Car"])
     }
 
     @Test
@@ -429,7 +430,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.encode(text: "mąka") == [101, 181, 102075, 10113, 102])
+        #expect(try tokenizer.encode(text: "mąka") == [101, 181, 102075, 10113, 102])
     }
 
     @Test
@@ -439,21 +440,21 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.tokenize(text: "mąka") == ["ma", "##ka"])
-        #expect(tokenizer.encode(text: "mąka") == [101, 5003, 2912, 102])
-        #expect(tokenizer.tokenize(text: "département") == ["depart", "##ement"])
-        #expect(tokenizer.encode(text: "département") == [101, 18280, 13665, 102])
-        #expect(tokenizer.tokenize(text: "Car") == ["car"])
+        #expect(try tokenizer.tokenize(text: "mąka") == ["ma", "##ka"])
+        #expect(try tokenizer.encode(text: "mąka") == [101, 5003, 2912, 102])
+        #expect(try tokenizer.tokenize(text: "département") == ["depart", "##ement"])
+        #expect(try tokenizer.encode(text: "département") == [101, 18280, 13665, 102])
+        #expect(try tokenizer.tokenize(text: "Car") == ["car"])
 
-        #expect(tokenizer.tokenize(text: "€4") == ["€", "##4"])
-        #expect(tokenizer.tokenize(text: "test $1 R2 #3 €4 £5 ¥6 ₣7 ₹8 ₱9 test") == ["test", "$", "1", "r", "##2", "#", "3", "€", "##4", "£5", "¥", "##6", "[UNK]", "₹", "##8", "₱", "##9", "test"])
+        #expect(try tokenizer.tokenize(text: "€4") == ["€", "##4"])
+        #expect(try tokenizer.tokenize(text: "test $1 R2 #3 €4 £5 ¥6 ₣7 ₹8 ₱9 test") == ["test", "$", "1", "r", "##2", "#", "3", "€", "##4", "£5", "¥", "##6", "[UNK]", "₹", "##8", "₱", "##9", "test"])
 
         let text = "l'eure"
-        let tokenized = tokenizer.tokenize(text: text)
+        let tokenized = try tokenizer.tokenize(text: text)
         #expect(tokenized == ["l", "'", "eu", "##re"])
-        let encoded = tokenizer.encode(text: text)
+        let encoded = try tokenizer.encode(text: text)
         #expect(encoded == [101, 1048, 1005, 7327, 2890, 102])
-        let decoded = tokenizer.decode(tokenIds: encoded, skipSpecialTokens: true)
+        let decoded = try tokenizer.decode(tokenIds: encoded, skipSpecialTokens: true)
         // Note: this matches the behaviour of the Python "slow" tokenizer, but the fast one produces "l ' eure"
         #expect(decoded == "l'eure")
 
@@ -472,24 +473,24 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.tokenize(text: "l'eure") == ["l", "'", "e", "ure"])
-        #expect(tokenizer.encode(text: "l'eure") == [0, 462, 108, 242, 2407, 2])
-        #expect(tokenizer.decode(tokenIds: tokenizer.encode(text: "l'eure"), skipSpecialTokens: true) == "l'eure")
+        #expect(try tokenizer.tokenize(text: "l'eure") == ["l", "'", "e", "ure"])
+        #expect(try tokenizer.encode(text: "l'eure") == [0, 462, 108, 242, 2407, 2])
+        #expect(try tokenizer.decode(tokenIds: try tokenizer.encode(text: "l'eure"), skipSpecialTokens: true) == "l'eure")
 
-        #expect(tokenizer.tokenize(text: "mąka") == ["m", "Ä", "ħ", "ka"])
-        #expect(tokenizer.encode(text: "mąka") == [0, 119, 649, 5782, 2348, 2])
+        #expect(try tokenizer.tokenize(text: "mąka") == ["m", "Ä", "ħ", "ka"])
+        #expect(try tokenizer.encode(text: "mąka") == [0, 119, 649, 5782, 2348, 2])
 
-        #expect(tokenizer.tokenize(text: "département") == ["d", "Ã©", "part", "ement"])
-        #expect(tokenizer.encode(text: "département") == [0, 417, 1140, 7755, 6285, 2])
+        #expect(try tokenizer.tokenize(text: "département") == ["d", "Ã©", "part", "ement"])
+        #expect(try tokenizer.encode(text: "département") == [0, 417, 1140, 7755, 6285, 2])
 
-        #expect(tokenizer.tokenize(text: "Who are you?") == ["Who", "Ġare", "Ġyou", "?"])
-        #expect(tokenizer.encode(text: "Who are you?") == [0, 12375, 32, 47, 116, 2])
+        #expect(try tokenizer.tokenize(text: "Who are you?") == ["Who", "Ġare", "Ġyou", "?"])
+        #expect(try tokenizer.encode(text: "Who are you?") == [0, 12375, 32, 47, 116, 2])
 
-        #expect(tokenizer.tokenize(text: " Who are you? ") == ["ĠWho", "Ġare", "Ġyou", "?", "Ġ"])
-        #expect(tokenizer.encode(text: " Who are you? ") == [0, 3394, 32, 47, 116, 1437, 2])
+        #expect(try tokenizer.tokenize(text: " Who are you? ") == ["ĠWho", "Ġare", "Ġyou", "?", "Ġ"])
+        #expect(try tokenizer.encode(text: " Who are you? ") == [0, 3394, 32, 47, 116, 1437, 2])
 
-        #expect(tokenizer.tokenize(text: "<s>Who are you?</s>") == ["<s>", "Who", "Ġare", "Ġyou", "?", "</s>"])
-        #expect(tokenizer.encode(text: "<s>Who are you?</s>") == [0, 0, 12375, 32, 47, 116, 2, 2])
+        #expect(try tokenizer.tokenize(text: "<s>Who are you?</s>") == ["<s>", "Who", "Ġare", "Ġyou", "?", "</s>"])
+        #expect(try tokenizer.encode(text: "<s>Who are you?</s>") == [0, 0, 12375, 32, 47, 116, 2, 2])
     }
 
     @Test
@@ -499,7 +500,7 @@ struct TokenizerTests {
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!
 
-        #expect(tokenizer.encode(text: "She took a train to the West") == [6284, 5244, 1261, 10018, 1317, 1278, 5046])
+        #expect(try tokenizer.encode(text: "She took a train to the West") == [6284, 5244, 1261, 10018, 1317, 1278, 5046])
     }
 
 }

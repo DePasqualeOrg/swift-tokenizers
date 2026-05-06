@@ -64,7 +64,7 @@ struct ChatTemplateTests {
         // The Rust path runs the canonical tokenizer.json pipeline with no Llama shim,
         // so encode / decode converge on the same output.
         let encodedTarget = [32010, 20355, 915, 278, 14156, 8720, 4086, 29889, 32007, 32001]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<|user|> Describe the Swift programming language.<|end|><|assistant|>"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
@@ -81,7 +81,7 @@ struct ChatTemplateTests {
         ]
         #expect(encoded == encodedTarget)
 
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget =
             "<｜begin▁of▁sentence｜><｜User｜>Describe the Swift programming language.<｜Assistant｜><think>\n"
         #expect(decoded == decodedTarget)
@@ -92,7 +92,7 @@ struct ChatTemplateTests {
         let tokenizer = try await Self.sharedTokenizerWithTemplateArray()
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
         let encodedTarget = [1, 29473, 3, 28752, 1040, 4672, 2563, 17060, 4610, 29491, 29473, 4]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<s> [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
@@ -111,7 +111,7 @@ struct ChatTemplateTests {
             1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
             29914, 25580, 29962,
         ]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<s>  [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
@@ -130,7 +130,7 @@ struct ChatTemplateTests {
             1, 29871, 518, 25580, 29962, 20355, 915, 278, 14156, 8720, 4086, 29889, 518,
             29914, 25580, 29962,
         ]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<s>  [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
@@ -144,7 +144,7 @@ struct ChatTemplateTests {
             messages: messages, chatTemplate: .name("default")
         )
         let encodedTarget = [1, 29473, 3, 28752, 1040, 4672, 2563, 17060, 4610, 29491, 29473, 4]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget = "<s> [INST] Describe the Swift programming language. [/INST]"
         #expect(encoded == encodedTarget)
         #expect(decoded == decodedTarget)
@@ -180,7 +180,7 @@ struct ChatTemplateTests {
         )
         let encoded = try tokenizer.applyChatTemplate(messages: messages)
         let encodedTarget = [151643, 151669, 74785, 279, 23670, 15473, 4128, 13, 151670]
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let decodedTarget =
             "<｜begin▁of▁sentence｜><｜User｜>Describe the Swift programming language.<｜Assistant｜>"
         #expect(encoded == encodedTarget)
@@ -204,7 +204,7 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: messages, chatTemplate: whitespaceSensitiveTemplate
         )
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
         let expected = "Describe the Swift programming language.\nassistant\n"
         #expect(decoded == expected)
         #expect(!decoded.hasPrefix("\n"))
@@ -252,7 +252,7 @@ struct ChatTemplateTests {
         let encoded = try tokenizer.applyChatTemplate(
             messages: weatherQueryMessages, tools: [getCurrentWeatherToolSpec]
         )
-        let decoded = tokenizer.decode(tokenIds: encoded)
+        let decoded = try tokenizer.decode(tokenIds: encoded)
 
         func assertDictsAreEqual(_ actual: [String: Any], _ expected: [String: Any]) {
             for (key, value) in actual {
@@ -354,9 +354,9 @@ struct ChatTemplateTests {
             matching: tokenizerAndChatTemplateFiles
         )
         let qwen2VLEncoded = try qwen2VLTokenizer.applyChatTemplate(messages: visionMessages)
-        let qwen2VLDecoded = qwen2VLTokenizer.decode(tokenIds: qwen2VLEncoded)
+        let qwen2VLDecoded = try qwen2VLTokenizer.decode(tokenIds: qwen2VLEncoded)
         let qwen2_5VLEncoded = try qwen2_5VLTokenizer.applyChatTemplate(messages: visionMessages)
-        let qwen2_5VLDecoded = qwen2_5VLTokenizer.decode(tokenIds: qwen2_5VLEncoded)
+        let qwen2_5VLDecoded = try qwen2_5VLTokenizer.decode(tokenIds: qwen2_5VLEncoded)
         let expectedOutput = """
             <|im_start|>system
             You are a helpful assistant.<|im_end|>
@@ -382,14 +382,12 @@ struct ChatTemplateTests {
         do {
             _ = try tokenizer.applyChatTemplate(messages: [])
             Issue.record("Expected error was not thrown")
-        } catch let tokenizerError as TokenizerError {
+        } catch let tokenizerError {
             if case .missingChatTemplate = tokenizerError {
                 // Correct error caught, test passes
             } else {
                 Issue.record("Expected .missingChatTemplate, but got \(tokenizerError)")
             }
-        } catch {
-            Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
         }
     }
 
@@ -404,14 +402,12 @@ struct ChatTemplateTests {
                 messages: messages, chatTemplate: .literal(brokenTemplate)
             )
             Issue.record("Expected compile error was not thrown")
-        } catch let tokenizerError as TokenizerError {
+        } catch let tokenizerError {
             guard case let .chatTemplate(message) = tokenizerError else {
                 Issue.record("Expected .chatTemplate, but got \(tokenizerError)")
                 return
             }
             #expect(!message.isEmpty)
-        } catch {
-            Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
         }
     }
 
@@ -427,14 +423,12 @@ struct ChatTemplateTests {
                 messages: messages, chatTemplate: .literal(template)
             )
             Issue.record("Expected render error was not thrown")
-        } catch let tokenizerError as TokenizerError {
+        } catch let tokenizerError {
             guard case let .chatTemplate(message) = tokenizerError else {
                 Issue.record("Expected .chatTemplate, but got \(tokenizerError)")
                 return
             }
             #expect(!message.isEmpty)
-        } catch {
-            Issue.record("Expected error of type TokenizerError, but got \(type(of: error))")
         }
     }
 

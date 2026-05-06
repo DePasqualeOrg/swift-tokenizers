@@ -13,7 +13,7 @@ public extension AutoTokenizer {
     /// - Parameter directory: Path to a local directory containing tokenizer files.
     /// - Returns: A configured ``Tokenizer`` instance.
     /// - Throws: ``TokenizerError`` if required files are missing or configuration is invalid.
-    static func from(directory: URL) async throws -> Tokenizer {
+    static func from(directory: URL) async throws(TokenizerError) -> Tokenizer {
         return try await RustAutoTokenizerDirectoryLoader.load(from: directory)
     }
 }

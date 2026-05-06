@@ -84,7 +84,7 @@ struct AlgorithmTests {
         let tokenizer = try await AutoTokenizer.from(directory: directory)
 
         let expected = [3, 4, 5, 6, 7, 8, 3, 9, 10]
-        let encoded = tokenizer.encode(text: "The quick brown fox jumps over the lazy dog")
+        let encoded = try tokenizer.encode(text: "The quick brown fox jumps over the lazy dog")
         #expect(encoded == expected)
 
         let encoding = try tokenizer.encodeWithMetadata(text: "The quick brown fox jumps over the lazy dog")
@@ -98,11 +98,11 @@ struct AlgorithmTests {
         // No decoder in the fixture -> upstream falls back to joining with " ". The
         // fixture also sets `clean_up_tokenization_spaces: false` so the space-join
         // survives the backend's cleanup pass.
-        let decoded = tokenizer.decode(tokenIds: encoded, skipSpecialTokens: false)
+        let decoded = try tokenizer.decode(tokenIds: encoded, skipSpecialTokens: false)
         #expect(decoded == "the quick brown fox jumps over the lazy dog")
 
         // Out-of-vocabulary words fall through to the unknown token.
-        #expect(tokenizer.encode(text: "Hello unknown world") == [1, 0, 2])
+        #expect(try tokenizer.encode(text: "Hello unknown world") == [1, 0, 2])
     }
 
     // MARK: - Unigram algorithm
@@ -148,7 +148,7 @@ struct AlgorithmTests {
             ("ab", -1.0),
         ])
         let tokenizer = try await AutoTokenizer.from(directory: directory)
-        #expect(tokenizer.tokenize(text: "ab") == ["ab"])
+        #expect(try tokenizer.tokenize(text: "ab") == ["ab"])
     }
 
     @Test
@@ -162,7 +162,7 @@ struct AlgorithmTests {
             ("ab", -5.0),
         ])
         let tokenizer = try await AutoTokenizer.from(directory: directory)
-        #expect(tokenizer.tokenize(text: "ab") == ["a", "b"])
+        #expect(try tokenizer.tokenize(text: "ab") == ["a", "b"])
     }
 
     @Test
@@ -179,7 +179,7 @@ struct AlgorithmTests {
         ])
         let tokenizer = try await AutoTokenizer.from(directory: directory)
         // "hello" can split as he+ll+o (-3) or hell+o (-6) or he+l+l+o (fails because there is no "l"). The algorithm picks he+ll+o since -3 > -6.
-        #expect(tokenizer.tokenize(text: "hello") == ["he", "ll", "o"])
+        #expect(try tokenizer.tokenize(text: "hello") == ["he", "ll", "o"])
     }
 
     @Test
@@ -194,7 +194,7 @@ struct AlgorithmTests {
         // text spans into a single token (see `Unigram::tokenize` in
         // `tokenizers/src/models/unigram/model.rs`). The Rust backend produces
         // `"xy"` as one fused unknown between the known `h` and `i`.
-        #expect(tokenizer.tokenize(text: "hxyi") == ["h", "xy", "i"])
+        #expect(try tokenizer.tokenize(text: "hxyi") == ["h", "xy", "i"])
         // `convertTokenToId` reports vocabulary membership, not tokenization
         // outcome — unknown characters are absent from the vocab and resolve to
         // `nil`, matching upstream `Tokenizer::token_to_id`.

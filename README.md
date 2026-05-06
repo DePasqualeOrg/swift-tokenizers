@@ -29,8 +29,8 @@ let tokenizer = try await AutoTokenizer.from(directory: localDirectory)
 Use `encode` when you only need token IDs:
 
 ```swift
-let tokenIds = tokenizer.encode(text: "The quick brown fox")
-let text = tokenizer.decode(tokenIds: tokenIds)
+let tokenIds = try tokenizer.encode(text: "The quick brown fox")
+let text = try tokenizer.decode(tokenIds: tokenIds)
 ```
 
 Use `encodeWithMetadata` when you need the richer encoding data, including token strings, masks, sequence indices, word indices, and offset spans:
@@ -41,6 +41,44 @@ let tokenIds = encoding.tokenIds
 let firstTokenSpan = encoding.offsetSpan(forTokenIndex: 0)
 ```
 
+`encode`, `decode`, `tokenize`, `encodeBatch`, and the `*WithMetadata` variants throw `TokenizerError` on failure (invalid token IDs, configuration mismatches, internal Rust errors). Wrap calls in `do/catch` when you want to surface specific cases:
+
+```swift
+do {
+    let text = try tokenizer.decode(tokenIds: tokenIds)
+    print(text)
+} catch let error {
+    switch error {
+    case .invalidTokenId(let id):
+        print("Token id \(id) is out of range")
+    default:
+        print(error.localizedDescription)
+    }
+}
+```
+
+### Streaming Detokenizer
+
+For streaming generation, feed tokens one at a time into a `StreamingDetokenizer` that emits text chunks as soon as enough bytes are available to form complete Unicode scalars. Internal state is bounded — the buffer is trimmed after every emission, so it does not grow with stream length.
+
+```swift
+let stream = tokenizer.streamingDetokenizer()
+for await tokenId in tokenIdStream {
+    if let chunk = try stream.consume(tokenId) {
+        print(chunk, terminator: "")
+    }
+    // `nil` means the token's bytes are mid-scalar — wait for the next token.
+}
+```
+
+When resuming a stream after an interruption, seed the detokenizer with the prior tokens so they are not re-emitted:
+
+```swift
+let stream = tokenizer.streamingDetokenizer(initialTokenIds: priorTokens)
+```
+
+Streaming uses an uncleaned decode path so retroactive cleanup does not break the byte-prefix invariant. Consumers that want the cleaned form can call `tokenizer.decode(tokenIds:)` on the accumulated IDs at the end of the stream.
+
 ### Chat Templates
 
 ```swift
@@ -48,7 +86,7 @@ let messages: [[String: any Sendable]] = [
     ["role": "user", "content": "Describe the Swift programming language."],
 ]
 let encoded = try tokenizer.applyChatTemplate(messages: messages)
-let decoded = tokenizer.decode(tokenIds: encoded)
+let decoded = try tokenizer.decode(tokenIds: encoded)
 ```
 
 ### Tool Calling
@@ -72,6 +110,24 @@ let tokens = try tokenizer.applyChatTemplate(
     tools: [weatherTool]
 )
 ```
+
+## Migration
+
+### Throwing API
+
+`Tokenizer.encode`, `decode`, `tokenize`, `encodeBatch`, and the `*WithMetadata` variants now throw `TokenizerError` instead of silently returning empty results on failure. Add `try` to existing call sites:
+
+```swift
+// Before
+let ids = tokenizer.encode(text: prompt)
+let text = tokenizer.decode(tokenIds: ids)
+
+// After
+let ids = try tokenizer.encode(text: prompt)
+let text = try tokenizer.decode(tokenIds: ids)
+```
+
+The `Tokenizer` protocol uses typed throws (`throws(TokenizerError)`), so callers can `catch` exhaustively over the cases without a `default` arm.
 
 ## Migration From Swift Transformers
 
