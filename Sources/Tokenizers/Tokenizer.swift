@@ -16,6 +16,8 @@ public enum TokenizerError: LocalizedError, Equatable, Sendable {
     case missingChatTemplate
     case invalidConfiguration(String)
     case internalError(String)
+    case invalidTokenId(Int)
+    case invalidStreamingPrefix(tokenId: Int, expectedPrefix: String, actualString: String)
 
     public var errorDescription: String? {
         switch self {
@@ -29,12 +31,16 @@ public enum TokenizerError: LocalizedError, Equatable, Sendable {
             "Invalid tokenizer configuration: \(message)"
         case let .internalError(message):
             "Internal tokenizer error: \(message)"
+        case let .invalidTokenId(id):
+            "Invalid token id: \(id)."
+        case let .invalidStreamingPrefix(tokenId, expectedPrefix, actualString):
+            "Streaming detokenizer prefix invariant violated for token \(tokenId): expected prefix \(expectedPrefix.debugDescription), got \(actualString.debugDescription)."
         }
     }
 }
 
 package enum JSONBridge {
-    package static func foundationObject(from value: Any) throws -> Any {
+    package static func foundationObject(from value: Any) throws(TokenizerError) -> Any {
         switch value {
         case let value as String:
             return value
@@ -69,19 +75,33 @@ package enum JSONBridge {
         case is NSNull:
             return NSNull()
         case let value as [String: any Sendable]:
-            return try Dictionary(
-                uniqueKeysWithValues: value.map { key, nestedValue in
-                    (key, try foundationObject(from: nestedValue))
-                })
+            var result: [String: Any] = [:]
+            result.reserveCapacity(value.count)
+            for (key, nestedValue) in value {
+                result[key] = try foundationObject(from: nestedValue)
+            }
+            return result
         case let value as [String: Any]:
-            return try Dictionary(
-                uniqueKeysWithValues: value.map { key, nestedValue in
-                    (key, try foundationObject(from: nestedValue))
-                })
+            var result: [String: Any] = [:]
+            result.reserveCapacity(value.count)
+            for (key, nestedValue) in value {
+                result[key] = try foundationObject(from: nestedValue)
+            }
+            return result
         case let value as [any Sendable]:
-            return try value.map { try foundationObject(from: $0) }
+            var result: [Any] = []
+            result.reserveCapacity(value.count)
+            for nestedValue in value {
+                result.append(try foundationObject(from: nestedValue))
+            }
+            return result
         case let value as [Any]:
-            return try value.map { try foundationObject(from: $0) }
+            var result: [Any] = []
+            result.reserveCapacity(value.count)
+            for nestedValue in value {
+                result.append(try foundationObject(from: nestedValue))
+            }
+            return result
         default:
             let mirror = Mirror(reflecting: value)
             switch mirror.displayStyle {
@@ -91,7 +111,11 @@ package enum JSONBridge {
                 }
                 return try foundationObject(from: child.value)
             case .collection, .set:
-                return try mirror.children.map { try foundationObject(from: $0.value) }
+                var result: [Any] = []
+                for child in mirror.children {
+                    result.append(try foundationObject(from: child.value))
+                }
+                return result
             case .dictionary:
                 var result: [String: Any] = [:]
                 for child in mirror.children {
@@ -116,9 +140,14 @@ package enum JSONBridge {
         }
     }
 
-    package static func jsonString(from value: Any) throws -> String {
+    package static func jsonString(from value: Any) throws(TokenizerError) -> String {
         let object = try foundationObject(from: value)
-        let data = try JSONSerialization.data(withJSONObject: object)
+        let data: Data
+        do {
+            data = try JSONSerialization.data(withJSONObject: object)
+        } catch {
+            throw TokenizerError.internalError(error.localizedDescription)
+        }
         return String(decoding: data, as: UTF8.self)
     }
 }
@@ -349,7 +378,9 @@ public enum ChatTemplateOverride: Sendable {
 /// chat template application, and special token handling.
 public protocol Tokenizer: Sendable {
     /// Splits `text` into the subword token strings the tokenizer's model produces, without converting them to IDs and without adding special tokens.
-    func tokenize(text: String) -> [String]
+    ///
+    /// - Throws: ``TokenizerError`` if tokenization fails.
+    func tokenize(text: String) throws(TokenizerError) -> [String]
 
     /// Encodes `text` (optionally paired with a second sequence) to vocabulary IDs.
     ///
@@ -357,16 +388,18 @@ public protocol Tokenizer: Sendable {
     ///   - text: Primary text to encode.
     ///   - textPair: Secondary text for sentence-pair models, or `nil` for single-sequence encoding. Maps to Rust `EncodeInput::Dual` when supplied.
     ///   - addSpecialTokens: When `true`, applies the tokenizer's post-processor so that any required special tokens (such as bos/eos) are inserted.
+    /// - Throws: ``TokenizerError`` if encoding fails.
     /// - Returns: Vocabulary IDs for the encoded input.
-    func encode(text: String, textPair: String?, addSpecialTokens: Bool) -> [Int]
+    func encode(text: String, textPair: String?, addSpecialTokens: Bool) throws(TokenizerError) -> [Int]
 
     /// Encodes a batch of inputs to vocabulary IDs in parallel. Each pair element supplies the primary text and an optional `textPair` for sentence-pair encoding.
     ///
     /// - Parameters:
     ///   - inputs: The batch of inputs.
     ///   - addSpecialTokens: When `true`, applies the tokenizer's post-processor to every entry.
+    /// - Throws: ``TokenizerError`` if any entry fails to encode.
     /// - Returns: One token-ID array per input, in the same order.
-    func encodeBatch(_ inputs: [(text: String, textPair: String?)], addSpecialTokens: Bool) -> [[Int]]
+    func encodeBatch(_ inputs: [(text: String, textPair: String?)], addSpecialTokens: Bool) throws(TokenizerError) -> [[Int]]
 
     /// Encodes `text` (optionally paired with a second sequence) and returns a ``TokenizerEncoding`` containing token IDs along with token strings, masks, offset spans, and word/sequence indices.
     ///
@@ -382,7 +415,7 @@ public protocol Tokenizer: Sendable {
         textPair: String?,
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> TokenizerEncoding
+    ) throws(TokenizerError) -> TokenizerEncoding
 
     /// Encodes a batch of inputs in parallel and returns a ``TokenizerEncoding`` for each.
     ///
@@ -396,15 +429,16 @@ public protocol Tokenizer: Sendable {
         _ inputs: [(text: String, textPair: String?)],
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> [TokenizerEncoding]
+    ) throws(TokenizerError) -> [TokenizerEncoding]
 
     /// Decodes a sequence of vocabulary IDs back to text.
     ///
     /// - Parameters:
     ///   - tokenIds: Vocabulary IDs to decode.
     ///   - skipSpecialTokens: When `true`, omits any special tokens from the decoded string.
+    /// - Throws: ``TokenizerError`` if decoding fails or any token id is out of range.
     /// - Returns: Decoded text.
-    func decode(tokenIds: [Int], skipSpecialTokens: Bool) -> String
+    func decode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String
 
     /// Returns the vocabulary ID for `token`, or `nil` if it is not in the vocabulary.
     func convertTokenToId(_ token: String) -> Int?
@@ -454,7 +488,7 @@ public protocol Tokenizer: Sendable {
         maxLength: Int?,
         tools: [ToolSpec]?,
         additionalContext: [String: any Sendable]?
-    ) throws -> [Int]
+    ) throws(TokenizerError) -> [Int]
 }
 
 extension Tokenizer {
@@ -469,7 +503,7 @@ extension Tokenizer {
         maxLength: Int? = nil,
         tools: [ToolSpec]? = nil,
         additionalContext: [String: any Sendable]? = nil
-    ) throws -> [Int] {
+    ) throws(TokenizerError) -> [Int] {
         try applyChatTemplate(
             messages: messages,
             chatTemplate: chatTemplate,
@@ -490,7 +524,7 @@ extension Tokenizer {
         maxLength: Int? = nil,
         tools: [ToolSpec]? = nil,
         additionalContext: [String: any Sendable]? = nil
-    ) throws -> [Int] {
+    ) throws(TokenizerError) -> [Int] {
         try applyChatTemplate(
             messages: messages,
             chatTemplate: .literal(chatTemplate),
@@ -505,8 +539,8 @@ extension Tokenizer {
 
 public extension Tokenizer {
     /// Single-sequence convenience: encodes `text` to vocabulary IDs.
-    func encode(text: String, addSpecialTokens: Bool = true) -> [Int] {
-        encode(text: text, textPair: nil, addSpecialTokens: addSpecialTokens)
+    func encode(text: String, addSpecialTokens: Bool = true) throws(TokenizerError) -> [Int] {
+        try encode(text: text, textPair: nil, addSpecialTokens: addSpecialTokens)
     }
 
     /// Single-sequence convenience: encodes `text` with metadata using ``OffsetUnit/unicodeScalar`` for offset spans.
@@ -514,7 +548,7 @@ public extension Tokenizer {
         text: String,
         addSpecialTokens: Bool = true,
         offsetUnit: OffsetUnit = .unicodeScalar
-    ) throws -> TokenizerEncoding {
+    ) throws(TokenizerError) -> TokenizerEncoding {
         try encodeWithMetadata(
             text: text,
             textPair: nil,
@@ -524,8 +558,8 @@ public extension Tokenizer {
     }
 
     /// Single-sequence batch convenience: encodes each text without a pair sequence.
-    func encodeBatch(texts: [String], addSpecialTokens: Bool = true) -> [[Int]] {
-        encodeBatch(texts.map { ($0, nil) }, addSpecialTokens: addSpecialTokens)
+    func encodeBatch(texts: [String], addSpecialTokens: Bool = true) throws(TokenizerError) -> [[Int]] {
+        try encodeBatch(texts.map { ($0, nil) }, addSpecialTokens: addSpecialTokens)
     }
 
     /// Single-sequence batch convenience: encodes each text with metadata.
@@ -533,7 +567,7 @@ public extension Tokenizer {
         texts: [String],
         addSpecialTokens: Bool = true,
         offsetUnit: OffsetUnit = .unicodeScalar
-    ) throws -> [TokenizerEncoding] {
+    ) throws(TokenizerError) -> [TokenizerEncoding] {
         try encodeBatchWithMetadata(
             texts.map { ($0, nil) },
             addSpecialTokens: addSpecialTokens,
@@ -542,13 +576,13 @@ public extension Tokenizer {
     }
 
     /// Allows the tokenizer to be invoked as a function, equivalent to calling ``encode(text:addSpecialTokens:)``.
-    func callAsFunction(_ text: String, addSpecialTokens: Bool = true) -> [Int] {
-        encode(text: text, addSpecialTokens: addSpecialTokens)
+    func callAsFunction(_ text: String, addSpecialTokens: Bool = true) throws(TokenizerError) -> [Int] {
+        try encode(text: text, addSpecialTokens: addSpecialTokens)
     }
 
     /// Decodes a sequence of vocabulary IDs back to text without skipping special tokens.
-    func decode(tokenIds: [Int]) -> String {
-        decode(tokenIds: tokenIds, skipSpecialTokens: false)
+    func decode(tokenIds: [Int]) throws(TokenizerError) -> String {
+        try decode(tokenIds: tokenIds, skipSpecialTokens: false)
     }
 
     /// Returns the result of ``convertTokenToId(_:)`` for each input token.
@@ -597,7 +631,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
     package func selectedChatTemplate(
         chatTemplate: ChatTemplateOverride?,
         tools: [ToolSpec]?
-    ) throws -> String {
+    ) throws(TokenizerError) -> String {
         try runtimeConfiguration.selectedChatTemplate(chatTemplate: chatTemplate, tools: tools)
     }
 
@@ -606,7 +640,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         addGenerationPrompt: Bool,
         tools: [ToolSpec]?,
         additionalContext: [String: any Sendable]?
-    ) throws -> [String: Any] {
+    ) throws(TokenizerError) -> [String: Any] {
         try runtimeConfiguration.chatTemplateContextObject(
             messages: messages,
             addGenerationPrompt: addGenerationPrompt,
@@ -622,7 +656,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
     package func renderChatTemplateToString(
         template: String,
         contextObject: [String: Any]
-    ) throws -> String {
+    ) throws(TokenizerError) -> String {
         try rustTokenizer.renderChatTemplate(template: template, contextObject: contextObject)
     }
 
@@ -632,7 +666,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         addGenerationPrompt: Bool,
         tools: [ToolSpec]?,
         additionalContext: [String: any Sendable]?
-    ) throws -> String {
+    ) throws(TokenizerError) -> String {
         let selectedTemplate = try selectedChatTemplate(chatTemplate: chatTemplate, tools: tools)
         let contextObject = try chatTemplateContextObject(
             messages: messages,
@@ -660,16 +694,16 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
             .replacingOccurrences(of: " 're", with: "'re")
     }
 
-    public func tokenize(text: String) -> [String] {
-        rustTokenizer.tokenize(text: text)
+    public func tokenize(text: String) throws(TokenizerError) -> [String] {
+        try rustTokenizer.tokenize(text: text)
     }
 
-    public func encode(text: String, textPair: String?, addSpecialTokens: Bool) -> [Int] {
-        rustTokenizer.encode(text: text, textPair: textPair, addSpecialTokens: addSpecialTokens)
+    public func encode(text: String, textPair: String?, addSpecialTokens: Bool) throws(TokenizerError) -> [Int] {
+        try rustTokenizer.encode(text: text, textPair: textPair, addSpecialTokens: addSpecialTokens)
     }
 
-    public func encodeBatch(_ inputs: [(text: String, textPair: String?)], addSpecialTokens: Bool) -> [[Int]] {
-        rustTokenizer.encodeBatch(inputs, addSpecialTokens: addSpecialTokens)
+    public func encodeBatch(_ inputs: [(text: String, textPair: String?)], addSpecialTokens: Bool) throws(TokenizerError) -> [[Int]] {
+        try rustTokenizer.encodeBatch(inputs, addSpecialTokens: addSpecialTokens)
     }
 
     public func encodeWithMetadata(
@@ -677,7 +711,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         textPair: String?,
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> TokenizerEncoding {
+    ) throws(TokenizerError) -> TokenizerEncoding {
         try rustTokenizer.encodeWithMetadata(
             text: text,
             textPair: textPair,
@@ -690,7 +724,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         _ inputs: [(text: String, textPair: String?)],
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> [TokenizerEncoding] {
+    ) throws(TokenizerError) -> [TokenizerEncoding] {
         try rustTokenizer.encodeBatchWithMetadata(
             inputs,
             addSpecialTokens: addSpecialTokens,
@@ -698,9 +732,17 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         )
     }
 
-    public func decode(tokenIds: [Int], skipSpecialTokens: Bool) -> String {
-        let decoded = rustTokenizer.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
+    public func decode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
+        let decoded = try rustTokenizer.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
         return cleanUp(text: decoded)
+    }
+
+    /// Decodes without applying the cleanUp post-processing pass. Used by
+    /// ``StreamingDetokenizer`` to keep the decoder byte-prefix-monotonic so
+    /// retroactive cleanup rewrites (e.g. inserting an apostrophe across a
+    /// contraction) cannot trip the prefix invariant.
+    package func rawDecode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
+        try rustTokenizer.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
     }
 
     public func convertTokenToId(_ token: String) -> Int? {
@@ -723,7 +765,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
         maxLength: Int?,
         tools: [ToolSpec]?,
         additionalContext: [String: any Sendable]?
-    ) throws -> [Int] {
+    ) throws(TokenizerError) -> [Int] {
         let selectedTemplate = try selectedChatTemplate(chatTemplate: chatTemplate, tools: tools)
         let contextObject = try chatTemplateContextObject(
             messages: messages,

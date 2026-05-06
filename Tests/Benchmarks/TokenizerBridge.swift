@@ -18,12 +18,12 @@ struct TokenizerBridge: MLXLMCommon.Tokenizer {
         self.upstream = upstream
     }
 
-    func encode(text: String, addSpecialTokens: Bool) -> [Int] {
-        upstream.encode(text: text, addSpecialTokens: addSpecialTokens)
+    func encode(text: String, addSpecialTokens: Bool) throws -> [Int] {
+        try upstream.encode(text: text, addSpecialTokens: addSpecialTokens)
     }
 
-    func decode(tokenIds: [Int], skipSpecialTokens: Bool) -> String {
-        upstream.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
+    func decode(tokenIds: [Int], skipSpecialTokens: Bool) throws -> String {
+        try upstream.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
     }
 
     func convertTokenToId(_ token: String) -> Int? {
@@ -49,7 +49,7 @@ struct TokenizerBridge: MLXLMCommon.Tokenizer {
                 tools: tools,
                 additionalContext: additionalContext
             )
-        } catch let error as Tokenizers.TokenizerError where error == .missingChatTemplate {
+        } catch Tokenizers.TokenizerError.missingChatTemplate {
             throw MLXLMCommon.TokenizerError.missingChatTemplate
         }
     }

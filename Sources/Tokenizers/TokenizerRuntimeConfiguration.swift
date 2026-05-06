@@ -103,7 +103,7 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
     package func selectedChatTemplate(
         chatTemplate argument: ChatTemplateOverride?,
         tools: [ToolSpec]?
-    ) throws -> String {
+    ) throws(TokenizerError) -> String {
         if let argument, case let .literal(template) = argument {
             return template
         }
@@ -138,7 +138,7 @@ package struct TokenizerRuntimeConfiguration: Codable, Sendable {
         addGenerationPrompt: Bool,
         tools: [ToolSpec]?,
         additionalContext: [String: any Sendable]?
-    ) throws -> [String: Any] {
+    ) throws(TokenizerError) -> [String: Any] {
         var context: [String: Any] = [
             "messages": try JSONBridge.foundationObject(from: messages),
             "add_generation_prompt": addGenerationPrompt,

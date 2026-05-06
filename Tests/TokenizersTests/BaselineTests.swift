@@ -140,7 +140,7 @@ struct BaselineTests {
     ])
     func multiScriptEncoding(hubModelName: String) async throws {
         let tokenizer = try await Self.makeTokenizer(hubModelName: hubModelName)
-        let encoded = tokenizer.encode(text: Self.multiScriptInput)
+        let encoded = try tokenizer.encode(text: Self.multiScriptInput)
         Self.expectSnapshot(
             encoded,
             equals: Self.multiScriptExpected[hubModelName],
@@ -177,7 +177,7 @@ struct BaselineTests {
     ])
     func paritySnapshot(hubModelName: String) async throws {
         let tokenizer = try await Self.makeTokenizer(hubModelName: hubModelName)
-        let encoded = tokenizer.encode(text: "Who are you?")
+        let encoded = try tokenizer.encode(text: "Who are you?")
         Self.expectSnapshot(
             encoded,
             equals: Self.parityExpected[hubModelName],

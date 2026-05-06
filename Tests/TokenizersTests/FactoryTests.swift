@@ -30,7 +30,7 @@ struct FactoryTests {
         let modelDirectory = try await downloadModel("coreml-projects/Llama-2-7b-chat-coreml")
 
         let tokenizer = try await AutoTokenizer.from(directory: modelDirectory)
-        let inputIds = tokenizer("Today she took a train to the West")
+        let inputIds = try tokenizer("Today she took a train to the West")
         #expect(inputIds == [1, 20628, 1183, 3614, 263, 7945, 304, 278, 3122])
     }
 
@@ -39,7 +39,7 @@ struct FactoryTests {
         let modelDirectory = try await downloadModel("openai/whisper-large-v2")
 
         let tokenizer = try await AutoTokenizer.from(directory: modelDirectory)
-        let inputIds = tokenizer("Today she took a train to the West")
+        let inputIds = try tokenizer("Today she took a train to the West")
         #expect(inputIds == [50258, 50363, 27676, 750, 1890, 257, 3847, 281, 264, 4055, 50257])
     }
 }

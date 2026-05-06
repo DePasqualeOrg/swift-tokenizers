@@ -46,42 +46,30 @@ package final class RustTokenizer: Sendable {
         withAddedTokens ? totalVocabSize : baseVocabSize
     }
 
-    package func tokenize(text: String) -> [String] {
-        do {
-            return try inner.tokenize(text: text)
-        } catch {
-            assertionFailure("TokenizersFFI.tokenize failed for \(text.utf8.count)-byte input: \(error)")
-            return []
+    package func tokenize(text: String) throws(TokenizerError) -> [String] {
+        try bridgeFFIErrors {
+            try inner.tokenize(text: text)
         }
     }
 
-    package func encode(text: String, textPair: String?, addSpecialTokens: Bool) -> [Int] {
-        do {
-            let ids = try inner.encode(
+    package func encode(text: String, textPair: String?, addSpecialTokens: Bool) throws(TokenizerError) -> [Int] {
+        try bridgeFFIErrors {
+            try inner.encode(
                 text: text,
                 textPair: textPair,
                 addSpecialTokens: addSpecialTokens
-            )
-            return ids.map(Int.init)
-        } catch {
-            assertionFailure(
-                "TokenizersFFI.encode failed for \(text.utf8.count)-byte input (textPair: \(textPair?.utf8.count.description ?? "nil")): \(error)"
-            )
-            return []
+            ).map(Int.init)
         }
     }
 
     package func encodeBatch(
         _ inputs: [(text: String, textPair: String?)],
         addSpecialTokens: Bool
-    ) -> [[Int]] {
+    ) throws(TokenizerError) -> [[Int]] {
         let ffiInputs = inputs.map { TokenizersFFI.EncodeInput(text: $0.text, textPair: $0.textPair) }
-        do {
-            let ids = try inner.encodeBatch(inputs: ffiInputs, addSpecialTokens: addSpecialTokens)
-            return ids.map { $0.map(Int.init) }
-        } catch {
-            assertionFailure("TokenizersFFI.encodeBatch failed for batch of \(inputs.count): \(error)")
-            return []
+        return try bridgeFFIErrors {
+            try inner.encodeBatch(inputs: ffiInputs, addSpecialTokens: addSpecialTokens)
+                .map { $0.map(Int.init) }
         }
     }
 
@@ -90,7 +78,7 @@ package final class RustTokenizer: Sendable {
         textPair: String?,
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> TokenizerEncoding {
+    ) throws(TokenizerError) -> TokenizerEncoding {
         try bridgeFFIErrors {
             try inner.encodeWithMetadata(
                 text: text,
@@ -105,7 +93,7 @@ package final class RustTokenizer: Sendable {
         _ inputs: [(text: String, textPair: String?)],
         addSpecialTokens: Bool,
         offsetUnit: OffsetUnit
-    ) throws -> [TokenizerEncoding] {
+    ) throws(TokenizerError) -> [TokenizerEncoding] {
         let ffiInputs = inputs.map { TokenizersFFI.EncodeInput(text: $0.text, textPair: $0.textPair) }
         return try bridgeFFIErrors {
             try inner.encodeBatchWithMetadata(
@@ -116,29 +104,20 @@ package final class RustTokenizer: Sendable {
         }
     }
 
-    package func decode(tokenIds: [Int], skipSpecialTokens: Bool) -> String {
-        // Fail closed on out-of-`Int32` IDs. The public `Tokenizer` protocol
-        // declares `decode` non-throwing, so we have no way to surface the bad
-        // input — but silently dropping IDs would decode a different sequence
-        // than the caller asked for, which is worse than returning an empty
-        // string and tripping the debug-build assert. Vocabularies fit in
-        // `Int32` today (the largest production tokenizer is ~256k tokens), so
-        // this branch is unreachable in practice; the guard is here so a future
-        // caller passing bogus input fails predictably.
+    package func decode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
+        // Reject out-of-range IDs at the boundary. Rust's tokenizer API takes
+        // `u32`, so anything below `0` is semantically invalid; the FFI bridge
+        // uses `Int32`, so anything above `Int32.max` is rejected here.
         var ffiIds: [Int32] = []
         ffiIds.reserveCapacity(tokenIds.count)
         for id in tokenIds {
-            guard let value = Int32(exactly: id) else {
-                assertionFailure("TokenizersFFI.decode received out-of-Int32 token id: \(id)")
-                return ""
+            guard id >= 0, let value = Int32(exactly: id) else {
+                throw TokenizerError.invalidTokenId(id)
             }
             ffiIds.append(value)
         }
-        do {
-            return try inner.decode(tokenIds: ffiIds, skipSpecialTokens: skipSpecialTokens)
-        } catch {
-            assertionFailure("TokenizersFFI.decode failed for \(ffiIds.count)-token input: \(error)")
-            return ""
+        return try bridgeFFIErrors {
+            try inner.decode(tokenIds: ffiIds, skipSpecialTokens: skipSpecialTokens)
         }
     }
 
@@ -151,7 +130,7 @@ package final class RustTokenizer: Sendable {
         return inner.convertIdToToken(tokenId: id32)
     }
 
-    package func renderChatTemplate(template: String, contextObject: [String: Any]) throws -> String {
+    package func renderChatTemplate(template: String, contextObject: [String: Any]) throws(TokenizerError) -> String {
         try bridgeFFIErrors {
             let contextJSON = try JSONBridge.jsonString(from: contextObject)
             return try TokenizersFFI.renderTemplate(template: template, contextJson: contextJSON)
@@ -163,7 +142,7 @@ package final class RustTokenizer: Sendable {
         contextObject: [String: Any],
         truncation: Bool,
         maxLength: Int?
-    ) throws -> [Int] {
+    ) throws(TokenizerError) -> [Int] {
         let ffiMaxLength: UInt64?
         if let maxLength {
             guard maxLength >= 0 else {
@@ -183,6 +162,12 @@ package final class RustTokenizer: Sendable {
             ).map(Int.init)
         }
     }
+
+    /// Decode without any post-processing (no `cleanUp(text:)` rewrite). Used by
+    /// `StreamingDetokenizer` to maintain byte-prefix-monotonic decodes.
+    package func rawDecode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
+        try decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
+    }
 }
 
 /// Wraps a UniFFI-throwing call so any error becomes a public ``TokenizerError``.
@@ -195,7 +180,7 @@ package final class RustTokenizer: Sendable {
 /// remap it onto `.internalError` so all public throws stay inside the
 /// declared `TokenizerError` shape. Other errors thrown from inside `body`
 /// (for example, `NSError` from `JSONSerialization`) are remapped the same way.
-private func bridgeFFIErrors<T>(_ body: () throws -> T) throws -> T {
+private func bridgeFFIErrors<T>(_ body: () throws -> T) throws(TokenizerError) -> T {
     do {
         return try body()
     } catch let error as TokenizersFFI.TokenizerError {
@@ -293,7 +278,7 @@ private extension TokenizerRuntimeConfiguration.ChatTemplateSource {
 
 private extension TokenizersFFI.RuntimeConfiguration {
     var bridged: TokenizerRuntimeConfiguration {
-        get throws {
+        get throws(TokenizerError) {
             let modelMaxLengthInt: Int?
             if let modelMaxLength {
                 guard modelMaxLength <= UInt64(Int.max) else {
@@ -322,7 +307,7 @@ private extension TokenizersFFI.RuntimeConfiguration {
 
 private extension TokenizerRuntimeConfiguration {
     var ffi: TokenizersFFI.RuntimeConfiguration {
-        get throws {
+        get throws(TokenizerError) {
             let ffiModelMaxLength: UInt64?
             if let modelMaxLength {
                 guard modelMaxLength >= 0 else {
@@ -351,7 +336,7 @@ private extension TokenizerRuntimeConfiguration {
 
 private extension TokenizersFFI.TokenizerDescriptor {
     var bridged: RustTokenizerDescriptor {
-        get throws {
+        get throws(TokenizerError) {
             try RustTokenizerDescriptor(
                 runtimeConfiguration: runtimeConfiguration.bridged,
                 bosTokenId: bosTokenId.map(Int.init),
@@ -395,7 +380,7 @@ package enum RustAutoTokenizerDirectoryLoader {
         )
     }
 
-    package static func loadRuntimeConfiguration(from directory: URL) throws -> TokenizerRuntimeConfiguration {
+    package static func loadRuntimeConfiguration(from directory: URL) throws(TokenizerError) -> TokenizerRuntimeConfiguration {
         try bridgeFFIErrors {
             try TokenizersFFI.loadRuntimeConfiguration(directoryPath: directory.path).bridged
         }
@@ -404,7 +389,7 @@ package enum RustAutoTokenizerDirectoryLoader {
     package static func loadTokenizerCore(
         from directory: URL,
         runtimeConfiguration: TokenizerRuntimeConfiguration
-    ) async throws -> any Tokenizer {
+    ) async throws(TokenizerError) -> any Tokenizer {
         let ffiConfiguration = try runtimeConfiguration.ffi
         return try bridgeFFIErrors {
             let inner = try TokenizersFFI.Tokenizer.fromDirectoryWithRuntimeConfiguration(
@@ -415,7 +400,7 @@ package enum RustAutoTokenizerDirectoryLoader {
         }
     }
 
-    package static func load(from directory: URL) async throws -> any Tokenizer {
+    package static func load(from directory: URL) async throws(TokenizerError) -> any Tokenizer {
         try bridgeFFIErrors {
             let inner = try TokenizersFFI.Tokenizer.fromDirectory(directoryPath: directory.path)
             return try makeTokenizer(inner: inner)
