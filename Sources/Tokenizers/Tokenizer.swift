@@ -603,9 +603,19 @@ public extension Tokenizer {
     var unknownTokenId: Int? { unknownToken.flatMap { convertTokenToId($0) } }
 }
 
+/// A `Tokenizer` that exposes a raw decode path for streaming detokenization.
+///
+/// Conforming tokenizers promise that ``rawDecode(tokenIds:skipSpecialTokens:)``
+/// returns text without `cleanUp(text:)` post-processing — no whitespace
+/// fixups, no contraction rewrites, nothing that would break the byte-prefix
+/// monotonicity ``StreamingDetokenizer`` depends on.
+public protocol StreamingDecodeTokenizer: Tokenizer {
+    func rawDecode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String
+}
+
 /// Concrete ``Tokenizer`` conformance returned by ``AutoTokenizer``. Wraps a
 /// `RustTokenizer` and applies chat-template policy from the runtime configuration.
-package final class PreTrainedTokenizer: Sendable, Tokenizer {
+package final class PreTrainedTokenizer: Sendable, Tokenizer, StreamingDecodeTokenizer {
     package let rustTokenizer: RustTokenizer
     package let runtimeConfiguration: TokenizerRuntimeConfiguration
 
@@ -741,7 +751,7 @@ package final class PreTrainedTokenizer: Sendable, Tokenizer {
     /// ``StreamingDetokenizer`` to keep the decoder byte-prefix-monotonic so
     /// retroactive cleanup rewrites (e.g. inserting an apostrophe across a
     /// contraction) cannot trip the prefix invariant.
-    package func rawDecode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
+    public func rawDecode(tokenIds: [Int], skipSpecialTokens: Bool) throws(TokenizerError) -> String {
         try rustTokenizer.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
     }
 

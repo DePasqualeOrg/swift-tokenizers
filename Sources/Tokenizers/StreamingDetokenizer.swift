@@ -136,8 +136,8 @@ public final class StreamingDetokenizer {
     }
 
     private func rawDecode(tokenIds: [Int]) throws(TokenizerError) -> String {
-        if let pretrained = tokenizer as? PreTrainedTokenizer {
-            return try pretrained.rawDecode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
+        if let raw = tokenizer as? StreamingDecodeTokenizer {
+            return try raw.rawDecode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
         }
         return try tokenizer.decode(tokenIds: tokenIds, skipSpecialTokens: skipSpecialTokens)
     }
