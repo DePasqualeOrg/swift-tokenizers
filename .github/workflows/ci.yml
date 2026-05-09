@@ -86,6 +86,12 @@ jobs:
         name: Test (Linux, offline subset)
         runs-on: ubuntu-latest
         container: swift:6.2.3
+        defaults:
+            run:
+                # Inside the swift container the runner falls back to /bin/sh,
+                # which rejects `set -o pipefail`. Force bash so inline scripts
+                # behave the same as on a regular Linux runner.
+                shell: bash
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
