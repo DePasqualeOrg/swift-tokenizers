@@ -2,8 +2,8 @@
 # Emit a canonical SHA-256 hash of the Rust source tree and related build
 # inputs, as a single hex string to stdout.
 #
-# Used by the release workflow to pin the published XCFramework manifest to
-# the exact source state that produced it, and by the CI drift guard to
+# Used by the release workflow to pin the published artifactbundle manifest
+# to the exact source state that produced it, and by the CI drift guard to
 # detect when the pinned binary no longer matches the source tree.
 #
 # Inputs: all git-tracked files under the paths in ALLOWLIST below.

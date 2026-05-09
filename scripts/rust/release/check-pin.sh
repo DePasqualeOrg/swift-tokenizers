@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SUPPORTED_HASH_SCHEMA_VERSION=2
+SUPPORTED_HASH_SCHEMA_VERSION=3
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -42,7 +42,7 @@ actual_hash="$(bash "${HASH_SCRIPT}")"
 
 if [[ "${actual_hash}" != "${pin_source_hash}" ]]; then
     cat >&2 <<EOF
-Rust source has drifted from the pinned XCFramework (tokenizers-rust-${pin_version}).
+Rust source has drifted from the pinned artifactbundle (tokenizers-rust-${pin_version}).
 
     Pin.json.source_hash_sha256: ${pin_source_hash}
     Recomputed source hash:      ${actual_hash}

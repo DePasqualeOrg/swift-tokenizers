@@ -12,7 +12,7 @@ permissions:
 
 jobs:
     test-pinned:
-        name: Test (pinned XCFramework)
+        name: Test (pinned artifactbundle)
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -37,15 +37,93 @@ jobs:
                   toolchain: ${{ steps.rust-toolchain.outputs.version }}
                   targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
-            - name: Build Rust XCFramework
-              run: bash scripts/rust/build/build-rust-xcframework.sh
+            - name: Build Apple Rust slices
+              run: bash scripts/rust/build/build-rust-apple-slices.sh
 
-            - name: Run tests against locally built XCFramework
+            - name: Assemble Apple-only artifactbundle
+              # The Linux slices are built in a separate release-pipeline job.
+              # For the from-source PR check on macOS we assemble whatever is
+              # present (Apple slices only) — SwiftPM picks the host's variant
+              # at link time, so an Apple-only bundle is sufficient here.
+              run: bash scripts/rust/build/assemble-artifactbundle.sh ci-from-source
+
+            - name: Run tests against locally built artifactbundle
               env:
-                  TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH: Binaries/TokenizersRust.xcframework
+                  TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH: rust/target/artifactbundle/TokenizersRust.artifactbundle
               run: |
                   swift package clean
                   swift test
+
+    test-linux:
+        # Build the Rust crate for the host Linux target, assemble a
+        # Linux-only artifactbundle, and run the offline test subset
+        # against it. Catches PRs that touch `Sources/Tokenizers/`,
+        # the UniFFI wrapper, or the Rust crate before merge rather
+        # than at release time.
+        #
+        # The job filters to AlgorithmTests + UniffiSpikeTests because
+        # the other test files go through `HubClient` from `swift-hf-api`,
+        # which triggers a deterministic `libcurl.Easy Code=43`
+        # (`CURLE_BAD_FUNCTION_ARGUMENT`) crash in
+        # `_HTTPURLProtocol.configureEasyHandle` on Swift 6.2.x / 6.3.x +
+        # Linux when curl reuses a handle across an HTTP redirect. The
+        # crash is upstream FoundationNetworking, not anything in this
+        # repo (which does not use URLSession at all).
+        #
+        #   Issue: https://github.com/swiftlang/swift-corelibs-foundation/issues/5445
+        #   Fix:   https://github.com/swiftlang/swift-corelibs-foundation/pull/5448
+        #          (merged 2026-04-08; drops the `preferredReceiveBufferSize`
+        #          call that libcurl 8.5.0 rejects on a reused handle)
+        #
+        # The fix is on `main` and `release/6.4.x` only — not backported
+        # to 6.2.x or 6.3.x — so the first user-visible Swift release
+        # containing it is 6.4. When the `container:` below is bumped
+        # to `swift:6.4` or later, drop the `--filter` flags in the
+        # test step to run the full suite.
+        name: Test (Linux, offline subset)
+        runs-on: ubuntu-latest
+        container: swift:6.2.3
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Read Rust toolchain version
+              id: rust-toolchain
+              run: |
+                  version=$(awk -F'"' '/^channel/ {print $2; exit}' rust-toolchain.toml)
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
+
+            - name: Install rustup and the host Linux target
+              # The container is a Swift toolchain image without rustup.
+              # `dtolnay/rust-toolchain` does not work inside containers, so
+              # bootstrap rustup directly.
+              env:
+                  RUST_VERSION: ${{ steps.rust-toolchain.outputs.version }}
+              run: |
+                  set -euo pipefail
+                  apt-get update -qq
+                  apt-get install -y --no-install-recommends \
+                    curl ca-certificates build-essential pkg-config python3
+                  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                    | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile minimal
+                  echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+            - name: Build host Linux Rust slice
+              env:
+                  TOKENIZERS_LINUX_TARGETS: x86_64-unknown-linux-gnu
+              run: bash scripts/rust/build/build-rust-linux-archives.sh
+
+            - name: Assemble Linux-only artifactbundle
+              run: bash scripts/rust/build/assemble-artifactbundle.sh ci-linux-from-source
+
+            - name: Run offline-only swift test against the locally assembled bundle
+              env:
+                  TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH: rust/target/artifactbundle/TokenizersRust.artifactbundle
+              run: |
+                  swift package clean
+                  # TODO(swift-6.4): drop --filter flags once the
+                  # `container:` above is bumped to swift:6.4 or later;
+                  # the job-level comment has the upstream issue links.
+                  swift test --filter Algorithm --filter UniffiSpike
 
     wrapper-drift-changes:
         # Detects whether the PR touched any input that influences the generated
@@ -74,9 +152,10 @@ jobs:
         # `Sources/TokenizersFFI/Generated/TokenizersFFI.swift` still matches what
         # the bindgen would emit for the current Rust source. The check rebuilds
         # only the host static library and the bindgen binary (no per-target
-        # matrix, no xcframework), but is still gated by `wrapper-drift-changes`
-        # on PRs that don't touch the relevant inputs to skip the cargo build
-        # entirely. `push` and `workflow_dispatch` always run the check.
+        # matrix, no artifactbundle assembly), but is still gated by
+        # `wrapper-drift-changes` on PRs that don't touch the relevant inputs to
+        # skip the cargo build entirely. `push` and `workflow_dispatch` always
+        # run the check.
         name: UniFFI wrapper drift
         runs-on: macos-latest
         needs: wrapper-drift-changes

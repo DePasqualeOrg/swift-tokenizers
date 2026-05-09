@@ -4,13 +4,19 @@ Refer to the [Benchmarks](#benchmarks) section to compare the performance of Swi
 
 ## Package Setup
 
-Swift Tokenizers requires Swift 6.1 or newer and supports Apple platforms only (macOS 14+, iOS 17+). The Rust backend is distributed as a prebuilt XCFramework, so Linux is not supported.
+Swift Tokenizers requires Swift 6.2 or newer (Xcode 26 on Apple platforms) and supports macOS 14+, iOS 17+, and Linux (`x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`). The Rust backend is distributed as a single SE-0482 `staticLibrary` artifactbundle that ships Apple and Linux slices in one bundle, so consumers add a single dependency without platform-conditional manifest logic.
 
 ```swift
 dependencies: [
     .package(url: "https://github.com/DePasqualeOrg/swift-tokenizers.git", from: "0.5.0")
 ]
 ```
+
+### Linux notes
+
+- Linux binaries are built against glibc on Ubuntu 22.04, so they are forward-compatible with the glibc shipped in newer Ubuntu LTS images. musl is not supported.
+- The package's PR CI runs `swift test` on Linux against the offline test subset only. Tests that go through `swift-hf-api`'s `HubClient` are gated to macOS because Swift 6.2.x and 6.3.x on Linux crash deterministically in `_HTTPURLProtocol.configureEasyHandle` (`libcurl.Easy Code=43`) on Hugging Face's redirect path; the wrapper itself does not use `URLSession`. The crash is fixed upstream by [swift-corelibs-foundation#5448](https://github.com/swiftlang/swift-corelibs-foundation/pull/5448) and will reach end users in Swift 6.4. See [`docs/linux.md`](docs/linux.md) for more detail.
+- Older Xcode versions (and Swift toolchains older than 6.2) cannot resolve the package, since the artifactbundle uses the SE-0482 `staticLibrary` artifact type that landed in Swift 6.2.
 
 ## Examples
 

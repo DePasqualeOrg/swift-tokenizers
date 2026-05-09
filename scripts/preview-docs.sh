@@ -14,10 +14,11 @@ cd "$(dirname "$0")/.."
 
 export TOKENIZERS_ENABLE_DOCS=1
 
-# Use the locally built Rust XCFramework if it exists, so the build doesn't fail
-# on a published artifact that lags the Swift source.
-if [[ -d "Binaries/TokenizersRust.xcframework" && -z "${TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH:-}" ]]; then
-    export TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH="Binaries/TokenizersRust.xcframework"
+# Use a locally assembled Rust artifactbundle if one exists, so the build
+# doesn't fail on a published artifact that lags the Swift source.
+local_bundle="rust/target/artifactbundle/TokenizersRust.artifactbundle"
+if [[ -d "${local_bundle}" && -z "${TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH:-}" ]]; then
+    export TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH="${local_bundle}"
 fi
 
 swift package --disable-sandbox preview-documentation --target Tokenizers
