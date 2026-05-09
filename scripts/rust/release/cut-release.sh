@@ -79,7 +79,7 @@ gh workflow run rust-release.yml --ref "${BRANCH}" \
   -f "expected_commit=${EXPECTED_COMMIT}"
 
 echo
-echo "Dispatched Publish Rust XCFramework for ${VERSION} on ${BRANCH} at ${EXPECTED_COMMIT}."
+echo "Dispatched Publish Rust artifactbundle for ${VERSION} on ${BRANCH} at ${EXPECTED_COMMIT}."
 
 if [[ "${WAIT}" != true ]]; then
   echo "Inspect status with:"
@@ -193,10 +193,10 @@ while true; do
       mv "${tmp_manifest}" "${pin_file}"
       trap - EXIT
 
-      # Mirror the XCFramework URL and checksum into Package.swift's inline constants.
+      # Mirror the artifactbundle URL and checksum into Package.swift's inline constants.
       # Package.swift reads the pinned values from these constants rather than Pin.json
       # because manifest-eval file I/O is unreliable for URL-based dependency consumers.
-      manifest_url="$(jq -r '.xcframework_url' "${pin_file}")"
+      manifest_url="$(jq -r '.artifactbundle_url' "${pin_file}")"
       manifest_checksum="$(jq -r '.checksum' "${pin_file}")"
       package_swift="${REPO_ROOT}/Package.swift"
       python3 - "${package_swift}" "${manifest_url}" "${manifest_checksum}" <<'PY'
@@ -207,12 +207,12 @@ path, url, checksum = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(path, "r", encoding="utf-8") as f:
     text = f.read()
 text = re.sub(
-    r'(let tokenizersRustXCFrameworkURL\s*=\s*\n?\s*")[^"]*(")',
+    r'(let tokenizersRustArtifactBundleURL\s*=\s*\n?\s*")[^"]*(")',
     lambda m: m.group(1) + url + m.group(2),
     text,
 )
 text = re.sub(
-    r'(let tokenizersRustXCFrameworkChecksum\s*=\s*\n?\s*")[^"]*(")',
+    r'(let tokenizersRustArtifactBundleChecksum\s*=\s*\n?\s*")[^"]*(")',
     lambda m: m.group(1) + checksum + m.group(2),
     text,
 )
@@ -221,7 +221,7 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 
       git add "${pin_file}" "${package_swift}"
-      git commit -m "Pin Rust XCFramework to tokenizers-rust-${VERSION}"
+      git commit -m "Pin Rust artifactbundle to tokenizers-rust-${VERSION}"
 
       echo
       echo "Committed rust/Pin.json and Package.swift bump to tokenizers-rust-${VERSION}."

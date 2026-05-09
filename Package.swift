@@ -1,19 +1,19 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 
 import PackageDescription
 
-// Pinned XCFramework for the Rust backend. These mirror `rust/Pin.json` and are
+// Pinned artifactbundle for the Rust backend. These mirror `rust/Pin.json` and are
 // kept in sync by scripts/rust/release/cut-release.sh. Inlined here rather than
 // read from Pin.json because manifest-eval file I/O is unreliable for URL-based
 // dependency consumers (both `Context.packageDirectory` and `#filePath` return
 // synthetic paths during dep evaluation).
-let tokenizersRustXCFrameworkURL =
-    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.5.0/TokenizersRust-0.5.0.xcframework.zip"
-let tokenizersRustXCFrameworkChecksum =
-    "a6f475c34de051e090bd14c072b393d33309a2de5f89ac49fc3bf0c2287151bd"
+let tokenizersRustArtifactBundleURL =
+    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.6.0/TokenizersRust-0.6.0.artifactbundle.zip"
+let tokenizersRustArtifactBundleChecksum =
+    "a7070d1638177c31cc97592cb6dc7302e50d9c79286ec5d7d5b6a710f2c00f5f"
 
 let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
-let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_XCFRAMEWORK_PATH"]
+let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH"]
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", from: "0.3.2")
@@ -42,13 +42,15 @@ if docsEnabled {
 
 let tokenizersRustTarget: Target =
     if let localRustArtifactPath {
-        // Used by the Rust release workflow to validate a freshly built XCFramework before publishing.
+        // Used by the Rust release workflow to validate a freshly built artifactbundle before publishing.
+        // The override must point at an unzipped directory whose name ends in `.artifactbundle`; SwiftPM
+        // uses the suffix to discriminate, so a `.zip` path will not work.
         .binaryTarget(name: "TokenizersRust", path: localRustArtifactPath)
     } else {
         .binaryTarget(
             name: "TokenizersRust",
-            url: tokenizersRustXCFrameworkURL,
-            checksum: tokenizersRustXCFrameworkChecksum
+            url: tokenizersRustArtifactBundleURL,
+            checksum: tokenizersRustArtifactBundleChecksum
         )
     }
 
@@ -59,12 +61,31 @@ var packageTargets: [Target] = [
     // the public Swift API surface is unaffected. The committed wrapper lives
     // at `Sources/TokenizersFFI/Generated/<wrapper>.swift` and is regenerated
     // by `scripts/rust/regenerate-wrapper.sh`.
+    //
+    // `linkerSettings` covers symbols the Rust staticlib pulls in from libc
+    // satellites. SE-0482 artifactbundles do not propagate transitive link
+    // dependencies, and on Apple these resolve through libSystem without
+    // explicit settings, so the list is gated to Linux only. `gcc_s` is
+    // normally auto-linked by gcc but appears in
+    // `cargo rustc -- --print=native-static-libs` output, so we declare it too.
+    //
+    // The `Resources` directory carries `PrivacyInfo.xcprivacy`. The Rust
+    // backend reads tokenizer JSON via `std::fs`, which compiles down to
+    // `fstat`/`lstat` calls — those fall under Apple's File Timestamp
+    // required-reason API category, so the manifest declares both the
+    // app-container reason (`C617.1`) and the user-granted-access reason
+    // (`3B52.1`) so the host app inherits coverage for both common loading
+    // patterns of `AutoTokenizer.from(directory:)`.
     .target(
         name: "TokenizersFFI",
         dependencies: [
             .target(name: "TokenizersRust")
         ],
-        path: "Sources/TokenizersFFI"
+        path: "Sources/TokenizersFFI",
+        resources: [.process("Resources")],
+        linkerSettings: ["dl", "pthread", "m", "rt", "util", "gcc_s"].map {
+            .linkedLibrary($0, .when(platforms: [.linux]))
+        }
     ),
     .target(
         name: "Tokenizers",

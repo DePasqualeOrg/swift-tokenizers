@@ -41,7 +41,7 @@ def main() -> None:
     locked_packages_by_name = {package["name"]: package for package in locked_packages}
 
     lines = [
-        f"Prebuilt Tokenizers Rust XCFramework artifact for {args.target_ref}.",
+        f"Prebuilt Tokenizers Rust artifactbundle for {args.target_ref}.",
         "",
         f"Artifact version: `{args.version}`",
         "",
