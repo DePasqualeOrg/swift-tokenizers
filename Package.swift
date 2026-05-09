@@ -29,7 +29,7 @@ let benchmarksEnabled = Context.environment["TOKENIZERS_ENABLE_BENCHMARKS"] == "
 #if os(macOS)
 if benchmarksEnabled {
     packageDependencies.append(
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.31.3")
+        .package(url: "https://github.com/DePasqualeOrg/mlx-swift-lm.git", branch: "main")
     )
 }
 #endif
