@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 use minijinja::Environment;
 use serde::Serialize;
 use serde_json::Value as JsonValue;

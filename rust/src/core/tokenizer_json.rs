@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::Path;

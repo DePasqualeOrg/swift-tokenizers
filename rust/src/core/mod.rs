@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 pub(crate) mod error;
 pub(crate) mod sidecars;
 pub(crate) mod template;

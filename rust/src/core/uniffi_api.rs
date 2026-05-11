@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 //! UniFFI-exported surface for the Swift backend. This is the sole FFI surface
 //! between the Rust core and the Swift adapter in `RustTokenizer.swift`.
 

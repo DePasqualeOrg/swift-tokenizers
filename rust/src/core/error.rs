@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CoreError {
     #[error("Tokenizer configuration is missing.")]

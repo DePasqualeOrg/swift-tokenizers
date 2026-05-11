@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 import Foundation
 
 package struct TokenizerRuntimeConfiguration: Codable, Sendable {

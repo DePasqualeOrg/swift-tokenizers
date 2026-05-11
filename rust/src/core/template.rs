@@ -1,3 +1,5 @@
+// Copyright © Anthony DePasquale
+
 use std::sync::LazyLock;
 
 use chrono::Local;
