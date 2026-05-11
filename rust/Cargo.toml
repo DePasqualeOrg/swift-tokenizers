@@ -30,12 +30,16 @@ uniffi = { version = "0.31.1", default-features = false }
 # so the bindgen auto-discovers `rust/uniffi.toml` from the crate root.
 uniffi-cli = ["uniffi/cli", "uniffi/cargo-metadata"]
 
+# Matches the Python `tokenizers` wheel. `unwind` lets UniFFI surface Rust
+# panics as thrown Swift errors instead of aborting the host app; unstripped
+# keeps symbol names for crash reports. Costs ~770 KB in the linked consumer
+# binary (aarch64-apple-darwin).
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
-strip = true
+panic = "unwind"
+strip = "none"
 
 # UniFFI 0.31.x's Swift bindgen emits `String(bytes:encoding:.utf8)!` for the
 # `FfiConverterString` lift/read paths. That goes through Foundation's NSString
