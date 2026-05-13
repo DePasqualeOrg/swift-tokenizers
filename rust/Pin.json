@@ -1,9 +1,9 @@
 {
   "hash_schema_version": 3,
-  "version": "0.6.1",
-  "git_commit": "f7cb9924f61b09c8fcf4294d9c76465260e982e1",
+  "version": "0.6.3",
+  "git_commit": "72a73df1a045541b6ce5bd93b65a6657507890dc",
   "rust_toolchain": "1.94.1",
-  "source_hash_sha256": "817cb885e50b876e06745814e9e2cbc03ee00b722b7cb3ea6cf885c0eb82d448",
-  "artifactbundle_url": "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.6.1/TokenizersRust-0.6.1.artifactbundle.zip",
-  "checksum": "8002b3bffd226b10d64cbe632804e5fc5bc7716ec30f2b1e058b95f25637c76c"
+  "source_hash_sha256": "0118bc1b0c98e63cb61475793b124549bfa2793d34e2202ecd8649264d28c554",
+  "artifactbundle_url": "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.6.3/TokenizersRust-0.6.3.artifactbundle.zip",
+  "checksum": "95e42afc2d1edbf2bd0209cd1e2cb202c1059900c1180942377cc3e800b52dc9"
 }
