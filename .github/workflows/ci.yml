@@ -12,18 +12,16 @@ permissions:
 
 jobs:
     test-pinned:
-        # Matrix Xcode coverage to catch issues like the SE-0482 artifactbundle
-        # module-map import failure reported on Xcode 26.3 (issue #33), which
-        # the "newest 26+" picker on macos-latest does not exercise.
-        # Xcode 26.4+ requires macOS 26 (Tahoe), so it must run on macos-26;
-        # 26.3 is the highest Xcode that installs on macos-15 (Sequoia).
+        # Matrix Xcode coverage to catch SE-0482 artifactbundle resolution
+        # regressions in Xcode's build system. Xcode 26.3 cannot resolve the
+        # bundle's modulemap (issue #33) and is omitted; Apple fixed the
+        # underlying bug in 26.4. Xcode 26.4+ requires macOS 26 (Tahoe), so
+        # the matrix runs on macos-26.
         name: Test (pinned artifactbundle, Xcode ${{ matrix.xcode }})
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - os: macos-15
-                      xcode: "26.3"
                     - os: macos-26
                       xcode: "26.4"
                     - os: macos-26
@@ -34,7 +32,20 @@ jobs:
             - uses: ./.github/actions/select-xcode
               with:
                   version: ${{ matrix.xcode }}
-            - name: Run tests
+            # Run both build systems: regressions can appear in one without the other.
+            # TEST_RUNNER_ prefix is required for xcodebuild to forward the env var
+            # to the xctest subprocess that actually emits the framework noise.
+            - name: xcodebuild test
+              env:
+                  TEST_RUNNER_OS_ACTIVITY_MODE: disable
+              run: |
+                  set -euo pipefail
+                  xcodebuild test \
+                    -scheme swift-tokenizers \
+                    -destination 'platform=macOS,arch=arm64' \
+                    | xcbeautify --renderer github-actions
+
+            - name: swift test
               run: swift test
 
     test-from-source:
