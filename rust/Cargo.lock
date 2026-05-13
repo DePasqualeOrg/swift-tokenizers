@@ -1185,7 +1185,7 @@ checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 [[package]]
 name = "uniffi"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "camino",
@@ -1200,7 +1200,7 @@ dependencies = [
 [[package]]
 name = "uniffi_bindgen"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "askama",
@@ -1225,7 +1225,7 @@ dependencies = [
 [[package]]
 name = "uniffi_core"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1236,7 +1236,7 @@ dependencies = [
 [[package]]
 name = "uniffi_internal_macros"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -1248,7 +1248,7 @@ dependencies = [
 [[package]]
 name = "uniffi_macros"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "camino",
  "fs-err",
@@ -1264,7 +1264,7 @@ dependencies = [
 [[package]]
 name = "uniffi_meta"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "siphasher",
@@ -1275,7 +1275,7 @@ dependencies = [
 [[package]]
 name = "uniffi_pipeline"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "heck",
@@ -1287,7 +1287,7 @@ dependencies = [
 [[package]]
 name = "uniffi_udl"
 version = "0.31.1"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "anyhow",
  "textwrap",
@@ -1358,7 +1358,7 @@ dependencies = [
 [[package]]
 name = "weedle2"
 version = "5.0.0"
-source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=b01730c0db3f8150c2aad994ee8f2c1275a6bf13#b01730c0db3f8150c2aad994ee8f2c1275a6bf13"
+source = "git+https://github.com/DePasqualeOrg/uniffi-rs.git?rev=e3e99802532ba76887b21a38de926dd55f469d48#e3e99802532ba76887b21a38de926dd55f469d48"
 dependencies = [
  "nom",
 ]

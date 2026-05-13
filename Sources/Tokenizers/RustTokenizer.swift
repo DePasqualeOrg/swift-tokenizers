@@ -1,7 +1,7 @@
 // Copyright © Anthony DePasquale
 
 import Foundation
-@_implementationOnly import TokenizersFFI
+import TokenizersFFI
 
 private struct RustTokenizerDescriptor {
     let runtimeConfiguration: TokenizerRuntimeConfiguration

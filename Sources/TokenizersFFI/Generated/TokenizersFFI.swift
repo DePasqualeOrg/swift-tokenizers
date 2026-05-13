@@ -9,7 +9,7 @@ import Foundation
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
 #if canImport(TokenizersRust)
-import TokenizersRust
+@_implementationOnly import TokenizersRust
 #endif
 
 fileprivate extension RustBuffer {
@@ -194,7 +194,7 @@ extension FfiConverterRustBuffer {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public static func lift(_ buf: RustBuffer) throws -> SwiftType {
+    static func lift(_ buf: RustBuffer) throws -> SwiftType {
         var reader = createReader(data: Data(rustBuffer: buf))
         let value = try read(from: &reader)
         if hasRemaining(reader) {
@@ -207,7 +207,7 @@ extension FfiConverterRustBuffer {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public static func lower(_ value: SwiftType) -> RustBuffer {
+    static func lower(_ value: SwiftType) -> RustBuffer {
           var writer = createWriter()
           write(value, into: &writer)
           return RustBuffer(bytes: writer)
@@ -480,7 +480,7 @@ fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
 
-    public static func lift(_ value: RustBuffer) throws -> String {
+    static func lift(_ value: RustBuffer) throws -> String {
         defer {
             value.deallocate()
         }
@@ -495,7 +495,7 @@ fileprivate struct FfiConverterString: FfiConverter {
         return String(decoding: bytes, as: UTF8.self)
     }
 
-    public static func lower(_ value: String) -> RustBuffer {
+    static func lower(_ value: String) -> RustBuffer {
         return value.utf8CString.withUnsafeBufferPointer { ptr in
             // The swift string gives us int8_t, we want uint8_t.
             ptr.withMemoryRebound(to: UInt8.self) { ptr in
@@ -753,7 +753,7 @@ open func tokenize(text: String)throws  -> [String]  {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeTokenizer: FfiConverter {
+struct FfiConverterTypeTokenizer: FfiConverter {
     typealias FfiType = UInt64
     typealias SwiftType = Tokenizer
 
@@ -779,14 +779,14 @@ public struct FfiConverterTypeTokenizer: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizer_lift(_ handle: UInt64) throws -> Tokenizer {
+func FfiConverterTypeTokenizer_lift(_ handle: UInt64) throws -> Tokenizer {
     return try FfiConverterTypeTokenizer.lift(handle)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizer_lower(_ value: Tokenizer) -> UInt64 {
+func FfiConverterTypeTokenizer_lower(_ value: Tokenizer) -> UInt64 {
     return FfiConverterTypeTokenizer.lower(value)
 }
 
@@ -820,7 +820,7 @@ extension EncodeInput: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeEncodeInput: FfiConverterRustBuffer {
+struct FfiConverterTypeEncodeInput: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncodeInput {
         return
             try EncodeInput(
@@ -839,14 +839,14 @@ public struct FfiConverterTypeEncodeInput: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncodeInput_lift(_ buf: RustBuffer) throws -> EncodeInput {
+func FfiConverterTypeEncodeInput_lift(_ buf: RustBuffer) throws -> EncodeInput {
     return try FfiConverterTypeEncodeInput.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncodeInput_lower(_ value: EncodeInput) -> RustBuffer {
+func FfiConverterTypeEncodeInput_lower(_ value: EncodeInput) -> RustBuffer {
     return FfiConverterTypeEncodeInput.lower(value)
 }
 
@@ -886,7 +886,7 @@ extension Encoding: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeEncoding: FfiConverterRustBuffer {
+struct FfiConverterTypeEncoding: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Encoding {
         return
             try Encoding(
@@ -905,14 +905,14 @@ public struct FfiConverterTypeEncoding: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncoding_lift(_ buf: RustBuffer) throws -> Encoding {
+func FfiConverterTypeEncoding_lift(_ buf: RustBuffer) throws -> Encoding {
     return try FfiConverterTypeEncoding.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncoding_lower(_ value: Encoding) -> RustBuffer {
+func FfiConverterTypeEncoding_lower(_ value: Encoding) -> RustBuffer {
     return FfiConverterTypeEncoding.lower(value)
 }
 
@@ -960,7 +960,7 @@ extension EncodingMetadata: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeEncodingMetadata: FfiConverterRustBuffer {
+struct FfiConverterTypeEncodingMetadata: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncodingMetadata {
         return
             try EncodingMetadata(
@@ -995,14 +995,14 @@ public struct FfiConverterTypeEncodingMetadata: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncodingMetadata_lift(_ buf: RustBuffer) throws -> EncodingMetadata {
+func FfiConverterTypeEncodingMetadata_lift(_ buf: RustBuffer) throws -> EncodingMetadata {
     return try FfiConverterTypeEncodingMetadata.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEncodingMetadata_lower(_ value: EncodingMetadata) -> RustBuffer {
+func FfiConverterTypeEncodingMetadata_lower(_ value: EncodingMetadata) -> RustBuffer {
     return FfiConverterTypeEncodingMetadata.lower(value)
 }
 
@@ -1030,7 +1030,7 @@ extension NamedChatTemplate: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeNamedChatTemplate: FfiConverterRustBuffer {
+struct FfiConverterTypeNamedChatTemplate: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NamedChatTemplate {
         return
             try NamedChatTemplate(
@@ -1049,14 +1049,14 @@ public struct FfiConverterTypeNamedChatTemplate: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeNamedChatTemplate_lift(_ buf: RustBuffer) throws -> NamedChatTemplate {
+func FfiConverterTypeNamedChatTemplate_lift(_ buf: RustBuffer) throws -> NamedChatTemplate {
     return try FfiConverterTypeNamedChatTemplate.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeNamedChatTemplate_lower(_ value: NamedChatTemplate) -> RustBuffer {
+func FfiConverterTypeNamedChatTemplate_lower(_ value: NamedChatTemplate) -> RustBuffer {
     return FfiConverterTypeNamedChatTemplate.lower(value)
 }
 
@@ -1088,7 +1088,7 @@ extension OffsetSpan: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeOffsetSpan: FfiConverterRustBuffer {
+struct FfiConverterTypeOffsetSpan: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OffsetSpan {
         return
             try OffsetSpan(
@@ -1107,14 +1107,14 @@ public struct FfiConverterTypeOffsetSpan: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeOffsetSpan_lift(_ buf: RustBuffer) throws -> OffsetSpan {
+func FfiConverterTypeOffsetSpan_lift(_ buf: RustBuffer) throws -> OffsetSpan {
     return try FfiConverterTypeOffsetSpan.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeOffsetSpan_lower(_ value: OffsetSpan) -> RustBuffer {
+func FfiConverterTypeOffsetSpan_lower(_ value: OffsetSpan) -> RustBuffer {
     return FfiConverterTypeOffsetSpan.lower(value)
 }
 
@@ -1164,7 +1164,7 @@ extension RuntimeConfiguration: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeRuntimeConfiguration: FfiConverterRustBuffer {
+struct FfiConverterTypeRuntimeConfiguration: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeConfiguration {
         return
             try RuntimeConfiguration(
@@ -1201,14 +1201,14 @@ public struct FfiConverterTypeRuntimeConfiguration: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRuntimeConfiguration_lift(_ buf: RustBuffer) throws -> RuntimeConfiguration {
+func FfiConverterTypeRuntimeConfiguration_lift(_ buf: RustBuffer) throws -> RuntimeConfiguration {
     return try FfiConverterTypeRuntimeConfiguration.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRuntimeConfiguration_lower(_ value: RuntimeConfiguration) -> RustBuffer {
+func FfiConverterTypeRuntimeConfiguration_lower(_ value: RuntimeConfiguration) -> RustBuffer {
     return FfiConverterTypeRuntimeConfiguration.lower(value)
 }
 
@@ -1249,7 +1249,7 @@ extension TokenizerDescriptor: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeTokenizerDescriptor: FfiConverterRustBuffer {
+struct FfiConverterTypeTokenizerDescriptor: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenizerDescriptor {
         return
             try TokenizerDescriptor(
@@ -1276,14 +1276,14 @@ public struct FfiConverterTypeTokenizerDescriptor: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizerDescriptor_lift(_ buf: RustBuffer) throws -> TokenizerDescriptor {
+func FfiConverterTypeTokenizerDescriptor_lift(_ buf: RustBuffer) throws -> TokenizerDescriptor {
     return try FfiConverterTypeTokenizerDescriptor.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizerDescriptor_lower(_ value: TokenizerDescriptor) -> RustBuffer {
+func FfiConverterTypeTokenizerDescriptor_lower(_ value: TokenizerDescriptor) -> RustBuffer {
     return FfiConverterTypeTokenizerDescriptor.lower(value)
 }
 
@@ -1314,7 +1314,7 @@ extension ChatTemplateSource: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeChatTemplateSource: FfiConverterRustBuffer {
+struct FfiConverterTypeChatTemplateSource: FfiConverterRustBuffer {
     typealias SwiftType = ChatTemplateSource
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatTemplateSource {
@@ -1358,14 +1358,14 @@ public struct FfiConverterTypeChatTemplateSource: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeChatTemplateSource_lift(_ buf: RustBuffer) throws -> ChatTemplateSource {
+func FfiConverterTypeChatTemplateSource_lift(_ buf: RustBuffer) throws -> ChatTemplateSource {
     return try FfiConverterTypeChatTemplateSource.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeChatTemplateSource_lower(_ value: ChatTemplateSource) -> RustBuffer {
+func FfiConverterTypeChatTemplateSource_lower(_ value: ChatTemplateSource) -> RustBuffer {
     return FfiConverterTypeChatTemplateSource.lower(value)
 }
 
@@ -1395,7 +1395,7 @@ extension OffsetUnit: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeOffsetUnit: FfiConverterRustBuffer {
+struct FfiConverterTypeOffsetUnit: FfiConverterRustBuffer {
     typealias SwiftType = OffsetUnit
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OffsetUnit {
@@ -1429,14 +1429,14 @@ public struct FfiConverterTypeOffsetUnit: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeOffsetUnit_lift(_ buf: RustBuffer) throws -> OffsetUnit {
+func FfiConverterTypeOffsetUnit_lift(_ buf: RustBuffer) throws -> OffsetUnit {
     return try FfiConverterTypeOffsetUnit.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeOffsetUnit_lower(_ value: OffsetUnit) -> RustBuffer {
+func FfiConverterTypeOffsetUnit_lower(_ value: OffsetUnit) -> RustBuffer {
     return FfiConverterTypeOffsetUnit.lower(value)
 }
 
@@ -1479,7 +1479,7 @@ extension TokenizerError: Sendable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeTokenizerError: FfiConverterRustBuffer {
+struct FfiConverterTypeTokenizerError: FfiConverterRustBuffer {
     typealias SwiftType = TokenizerError
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenizerError {
@@ -1537,14 +1537,14 @@ public struct FfiConverterTypeTokenizerError: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizerError_lift(_ buf: RustBuffer) throws -> TokenizerError {
+func FfiConverterTypeTokenizerError_lift(_ buf: RustBuffer) throws -> TokenizerError {
     return try FfiConverterTypeTokenizerError.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTokenizerError_lower(_ value: TokenizerError) -> RustBuffer {
+func FfiConverterTypeTokenizerError_lower(_ value: TokenizerError) -> RustBuffer {
     return FfiConverterTypeTokenizerError.lower(value)
 }
 

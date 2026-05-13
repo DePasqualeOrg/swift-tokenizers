@@ -11,3 +11,5 @@
 module_name = "TokenizersFFI"
 ffi_module_name = "TokenizersRust"
 ffi_module_filename = "TokenizersRust"
+implementation_only_ffi_module_import = true
+internal_ffi_converter_helpers = true
