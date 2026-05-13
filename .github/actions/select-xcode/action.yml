@@ -1,9 +1,11 @@
 name: Select Xcode with Swift 6.2+
 description: >
-  Select the newest Xcode 26+ install on the runner so a swift-tools-version
+  Select an installed Xcode 26+ on the runner so a swift-tools-version
   6.2 Package.swift resolves. macos-latest currently defaults to Xcode 16.4,
   which ships Swift 6.1.0 and rejects 6.2 manifests with
   "is using Swift tools version 6.2.0 but the installed version is 6.1.0".
+  By default picks the newest installed Xcode 26+; pass `version` to pin
+  a specific major.minor (e.g. `26.3`) for matrix coverage.
 
 # TODO: remove this action and every `- uses: ./.github/actions/select-xcode`
 # call site once GitHub's macos-latest image defaults to an Xcode that ships
@@ -12,15 +14,25 @@ description: >
 # (look for "(default)" in the Xcode table). When the default version meets
 # the package's swift-tools-version, the explicit selection becomes redundant.
 
+inputs:
+  version:
+    description: >
+      Xcode version glob to match (e.g. "26.3" matches Xcode_26.3*.app).
+      Defaults to "26", which picks the newest Xcode 26+ installed.
+    required: false
+    default: "26"
+
 runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        XCODE_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+        xcode=$(ls -d /Applications/Xcode_${XCODE_VERSION}*.app 2>/dev/null | sort -V | tail -1)
         if [[ -z "$xcode" ]]; then
-            echo "No Xcode 26+ installed on this runner image." >&2
+            echo "No Xcode matching /Applications/Xcode_${XCODE_VERSION}*.app installed on this runner image." >&2
             ls /Applications | grep -i xcode >&2 || true
             exit 1
         fi

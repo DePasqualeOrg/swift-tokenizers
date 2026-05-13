@@ -12,11 +12,28 @@ permissions:
 
 jobs:
     test-pinned:
-        name: Test (pinned artifactbundle)
-        runs-on: macos-latest
+        # Matrix Xcode coverage to catch issues like the SE-0482 artifactbundle
+        # module-map import failure reported on Xcode 26.3 (issue #33), which
+        # the "newest 26+" picker on macos-latest does not exercise.
+        # Xcode 26.4+ requires macOS 26 (Tahoe), so it must run on macos-26;
+        # 26.3 is the highest Xcode that installs on macos-15 (Sequoia).
+        name: Test (pinned artifactbundle, Xcode ${{ matrix.xcode }})
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: macos-15
+                      xcode: "26.3"
+                    - os: macos-26
+                      xcode: "26.4"
+                    - os: macos-26
+                      xcode: "26.5"
+        runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
             - uses: ./.github/actions/select-xcode
+              with:
+                  version: ${{ matrix.xcode }}
             - name: Run tests
               run: swift test
 
