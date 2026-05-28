@@ -27,6 +27,18 @@ pub(crate) fn make_environment() -> Environment<'static> {
     environment.add_function("strftime_now", |format: String| -> String {
         Local::now().format(&format).to_string()
     });
+    // `raise_exception(message)` is a transformers Jinja extension chat templates
+    // call to reject invalid input. minijinja has no equivalent, so register it to
+    // surface the template's message instead of "unknown function raise_exception".
+    environment.add_function(
+        "raise_exception",
+        |message: String| -> Result<String, minijinja::Error> {
+            Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                message,
+            ))
+        },
+    );
     environment.set_keep_trailing_newline(false);
     environment.set_trim_blocks(true);
     environment.set_lstrip_blocks(true);
@@ -67,4 +79,25 @@ static GENERATION_TAG: LazyLock<Regex> =
 
 fn normalize_template_source(template: &str) -> String {
     GENERATION_TAG.replace_all(template, "").into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `raise_exception` is a transformers Jinja extension chat templates use to
+    // reject invalid input; the rendered error must carry the template's message.
+    #[test]
+    fn raise_exception_surfaces_template_message() {
+        let environment = make_environment();
+        let template = r#"{{ raise_exception("ids must be alphanumeric with length 9") }}"#;
+        let error = render(&environment, template, &JsonValue::Null).unwrap_err();
+        let CoreError::ChatTemplate(message) = error else {
+            panic!("expected ChatTemplate error, got {error:?}");
+        };
+        assert!(
+            message.contains("alphanumeric") && message.contains("length 9"),
+            "message was: {message}"
+        );
+    }
 }
