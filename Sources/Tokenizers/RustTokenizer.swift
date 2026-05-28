@@ -351,7 +351,7 @@ private extension TokenizersFFI.TokenizerDescriptor {
     }
 }
 
-private extension TokenizersFFI.TokenizerError {
+package extension TokenizersFFI.TokenizerError {
     var bridged: Tokenizers.TokenizerError {
         // UniFFI 0.31.x's Swift bindgen quirk: error-enum variants are emitted
         // in PascalCase (Rust `MissingConfig` → Swift `.MissingConfig`), unlike
