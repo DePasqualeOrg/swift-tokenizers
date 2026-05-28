@@ -190,8 +190,11 @@ The benchmarks use tests from MLX Swift LM and are gated behind `TOKENIZERS_ENAB
 **From the command line**: use release builds for accurate numbers. Model loading benchmarks (LLM, VLM, embedding) require Metal, which is only available through `xcodebuild`.
 
 ```bash
-# Full suite, requires Metal
-TOKENIZERS_ENABLE_BENCHMARKS=1 xcodebuild test -scheme Benchmarks -destination 'platform=macOS,arch=arm64'
+# Full suite, requires Metal. TEST_RUNNER_OS_ACTIVITY_MODE=disable
+# silences macOS framework log spam (the TEST_RUNNER_ prefix is required
+# for xcodebuild to forward the variable into the test process).
+env TEST_RUNNER_OS_ACTIVITY_MODE=disable TOKENIZERS_ENABLE_BENCHMARKS=1 \
+  xcodebuild test -scheme Benchmarks -destination 'platform=macOS,arch=arm64'
 
 # Tokenizer benchmarks only
 TOKENIZERS_ENABLE_BENCHMARKS=1 swift test -c release --filter Benchmarks
