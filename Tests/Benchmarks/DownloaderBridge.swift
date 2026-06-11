@@ -13,13 +13,59 @@ enum DownloaderBridgeError: LocalizedError {
     }
 }
 
-struct HubClientDownloader: Downloader, @unchecked Sendable {
-    private let upstream: HubClient
+extension HFClient {
+    /// Shared zero-config client for benchmarks. `HFClient.init` throws only
+    /// on environment misconfiguration (e.g. a malformed `HF_ENDPOINT`), so a
+    /// trap here surfaces the configuration error directly.
+    static let `default`: HFClient = {
+        do {
+            return try HFClient()
+        } catch {
+            fatalError("Failed to create default HFClient: \(error.localizedDescription)")
+        }
+    }()
+}
 
-    init(_ upstream: HubClient) {
-        self.upstream = upstream
+/// Whether a cached snapshot plausibly contains the weights the caller asked
+/// for. A cached snapshot can be a partial download from an earlier, narrower
+/// pattern set (for example a tokenizer-only `*.json` fetch), and the cache
+/// cannot distinguish "file not in the repo" from "file not downloaded". Two
+/// checks cover the model-loading cases: every safetensors-shaped pattern
+/// must match at least one cached file, and when a safetensors index is
+/// cached, every weight file it lists must be present.
+private func cachedSnapshotSatisfies(patterns: [String], at directory: URL) -> Bool {
+    guard
+        let files = try? FileManager.default.subpathsOfDirectory(atPath: directory.path)
+    else {
+        return false
     }
 
+    for pattern in patterns where pattern.contains("safetensors") {
+        let matched = files.contains { path in
+            fnmatch(pattern, path, 0) == 0
+                || fnmatch(pattern, (path as NSString).lastPathComponent, 0) == 0
+        }
+        if !matched {
+            return false
+        }
+    }
+
+    let indexURL = directory.appending(path: "model.safetensors.index.json")
+    if let data = try? Data(contentsOf: indexURL),
+        let index = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let weightMap = index["weight_map"] as? [String: String]
+    {
+        let present = Set(files)
+        for weightFile in Set(weightMap.values) where !present.contains(weightFile) {
+            return false
+        }
+    }
+
+    return true
+}
+
+// swift-format-ignore: AvoidRetroactiveConformances
+extension HFAPI.HFClient: @retroactive Downloader {
     public func download(
         id: String,
         revision: String?,
@@ -27,26 +73,26 @@ struct HubClientDownloader: Downloader, @unchecked Sendable {
         useLatest: Bool,
         progressHandler: @Sendable @escaping (Progress) -> Void
     ) async throws -> URL {
-        guard let repoID = Repo.ID(rawValue: id) else {
+        guard let repoID = RepositoryID(id) else {
             throw DownloaderBridgeError.invalidRepositoryID(id)
         }
-        let revision = revision ?? "main"
+        let repository = model(repoID)
+
+        // The Downloader contract treats an empty pattern list as "the whole
+        // repository", whereas hf-hub treats an empty allow list as "nothing".
+        let allowPatterns = patterns.isEmpty ? nil : patterns
 
         if !useLatest,
-            let cached = upstream.resolveCachedSnapshot(
-                repo: repoID,
-                revision: revision,
-                matching: patterns
-            )
+            let cached = try await repository.resolveCachedSnapshot(
+                revision: revision, allowPatterns: allowPatterns),
+            cachedSnapshotSatisfies(patterns: patterns, at: cached)
         {
             return cached
         }
 
-        return try await upstream.downloadSnapshot(
-            of: repoID,
-            revision: revision,
-            matching: patterns,
-            progressHandler: progressHandler
-        )
+        // Benchmarks don't display progress, so download events are not
+        // bridged to Foundation.Progress here.
+        return try await repository.snapshotDownload(
+            revision: revision, allowPatterns: allowPatterns)
     }
 }

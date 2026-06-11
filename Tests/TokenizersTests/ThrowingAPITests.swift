@@ -11,18 +11,17 @@ private let downloadDestination: URL = {
     return base.appending(component: "huggingface-throwing-api-tests")
 }()
 
-private let hubClient = HubClient()
+private let hubClient = HFClient.default
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 
 private func downloadModel(_ name: String) async throws -> URL {
-    guard let repoId = Repo.ID(rawValue: name) else {
+    guard let repoId = RepositoryID(name) else {
         struct InvalidRepoID: Error { let name: String }
         throw InvalidRepoID(name: name)
     }
-    return try await hubClient.downloadSnapshot(
-        of: repoId,
-        matching: tokenizerFiles,
-        to: downloadDestination.appending(path: name)
+    return try await hubClient.model(repoId).snapshotDownload(
+        allowPatterns: tokenizerFiles,
+        localDir: downloadDestination.appending(path: name)
     )
 }
 

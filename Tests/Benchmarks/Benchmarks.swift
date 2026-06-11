@@ -4,7 +4,7 @@ import HFAPI
 import Testing
 
 private let benchmarksEnabled = ProcessInfo.processInfo.environment["TOKENIZERS_ENABLE_BENCHMARKS"] == "1"
-private let benchmarkDownloader = HubClientDownloader(.default)
+private let benchmarkDownloader = HFClient.default
 
 @Suite(.serialized, .enabled(if: benchmarksEnabled))
 struct Benchmarks {

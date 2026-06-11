@@ -12,7 +12,7 @@ private let downloadDestination: URL = {
     return base.appending(component: "huggingface-chat-template-tests")
 }()
 
-private let hubClient = HubClient()
+private let hubClient = HFClient.default
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 private let tokenizerAndChatTemplateFiles = [
     "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", "chat_template.json",
@@ -21,11 +21,14 @@ private let tokenizerAndChatTemplateFiles = [
 private typealias TemplateMessage = Tokenizers.Message
 private typealias TemplateToolSpec = Tokenizers.ToolSpec
 
-private func makeTokenizer(model: Repo.ID, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
-    let modelDirectory = try await hubClient.downloadSnapshot(
-        of: model,
-        matching: matching,
-        to: downloadDestination.appending(path: "\(model)")
+private func makeTokenizer(model: String, matching: [String] = tokenizerFiles) async throws -> Tokenizer {
+    guard let repoID = RepositoryID(model) else {
+        struct InvalidRepoID: Error { let name: String }
+        throw InvalidRepoID(name: model)
+    }
+    let modelDirectory = try await hubClient.model(repoID).snapshotDownload(
+        allowPatterns: matching,
+        localDir: downloadDestination.appending(path: model)
     )
     return try await AutoTokenizer.from(directory: modelDirectory)
 }

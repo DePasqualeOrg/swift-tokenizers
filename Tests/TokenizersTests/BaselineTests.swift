@@ -22,21 +22,23 @@ struct BaselineTests {
 
     private static let downloadDestination: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return base.appending(component: "huggingface-tests")
+        // Distinct from TokenizerTests' destination: the suites run in parallel
+        // and download overlapping models, and concurrent hf-hub snapshot
+        // downloads into the same local directory race on temp files.
+        return base.appending(component: "huggingface-baseline-tests")
     }()
 
-    private static let hubClient = HubClient()
+    private static let hubClient = HFClient.default
     private static let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 
     private static func downloadModel(_ modelName: String) async throws -> URL {
-        guard let repoId = Repo.ID(rawValue: modelName) else {
+        guard let repoId = RepositoryID(modelName) else {
             struct InvalidRepoID: Error { let name: String }
             throw InvalidRepoID(name: modelName)
         }
-        return try await hubClient.downloadSnapshot(
-            of: repoId,
-            matching: tokenizerFiles,
-            to: downloadDestination.appending(path: modelName)
+        return try await hubClient.model(repoId).snapshotDownload(
+            allowPatterns: tokenizerFiles,
+            localDir: downloadDestination.appending(path: modelName)
         )
     }
 
@@ -77,7 +79,7 @@ struct BaselineTests {
     // MARK: - Multi-script encoding snapshot
 
     private static let multiScriptExpected: [String: [Int]] = [
-        "coreml-projects/Llama-2-7b-chat-coreml": [
+        "enterprise-explorers/Llama-2-7b-chat-coreml": [
             1, 15043, 29871, 30793, 30967, 29991, 7203, 7616, 31494, 29871, 30159, 30156,
             30240, 30177, 30112, 29871, 30177, 19233, 30218, 19233, 30159, 259, 30297,
             30289, 30913, 30351, 30289, 31796, 30289, 30991, 30510, 30425, 30297, 31252,
@@ -129,7 +131,7 @@ struct BaselineTests {
     ]
 
     @Test(arguments: [
-        "coreml-projects/Llama-2-7b-chat-coreml",
+        "enterprise-explorers/Llama-2-7b-chat-coreml",
         "distilbert/distilbert-base-multilingual-cased",
         "distilbert/distilgpt2",
         "openai/whisper-large-v2",
@@ -151,7 +153,7 @@ struct BaselineTests {
     // MARK: - Parity snapshot
 
     private static let parityExpected: [String: [Int]] = [
-        "coreml-projects/Llama-2-7b-chat-coreml": [1, 11644, 526, 366, 29973],
+        "enterprise-explorers/Llama-2-7b-chat-coreml": [1, 11644, 526, 366, 29973],
         "google-bert/bert-base-uncased": [101, 2040, 2024, 2017, 1029, 102],
         "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": [15191, 525, 498, 30],
         "FacebookAI/xlm-roberta-base": [0, 40469, 621, 398, 32, 2],
@@ -160,7 +162,7 @@ struct BaselineTests {
 
     @Test(arguments: [
         // BPE + TemplateProcessing post-processor.
-        "coreml-projects/Llama-2-7b-chat-coreml",
+        "enterprise-explorers/Llama-2-7b-chat-coreml",
         // WordPiece.
         "google-bert/bert-base-uncased",
         // BPE with a ByteLevel post-processor. `tokenizer_config.json` sets

@@ -13,7 +13,7 @@ private let downloadDestination: URL = {
     return base.appending(component: "huggingface-tests")
 }()
 
-private let hubClient = HubClient()
+private let hubClient = HFClient.default
 
 private enum TestError: Error { case unsupportedTokenizer }
 
@@ -58,13 +58,12 @@ private func loadEdgeCases(for hubModelName: String) throws -> [EdgeCase]? {
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 
 private func downloadModel(_ modelName: String) async throws -> URL {
-    guard let repoId = Repo.ID(rawValue: modelName) else {
+    guard let repoId = RepositoryID(modelName) else {
         throw TestError.unsupportedTokenizer
     }
-    return try await hubClient.downloadSnapshot(
-        of: repoId,
-        matching: tokenizerFiles,
-        to: downloadDestination.appending(path: modelName)
+    return try await hubClient.model(repoId).snapshotDownload(
+        allowPatterns: tokenizerFiles,
+        localDir: downloadDestination.appending(path: modelName)
     )
 }
 
@@ -100,7 +99,7 @@ struct ModelSpec: Sendable, CustomStringConvertible {
 @Suite("Tokenizer Tests", .serialized)
 struct TokenizerTests {
     @Test(arguments: [
-        ModelSpec("coreml-projects/Llama-2-7b-chat-coreml", "llama_encoded", 0),
+        ModelSpec("enterprise-explorers/Llama-2-7b-chat-coreml", "llama_encoded", 0),
         ModelSpec("distilbert/distilbert-base-multilingual-cased", "distilbert_cased_encoded", 100),
         ModelSpec("distilbert/distilgpt2", "gpt2_encoded_tokens"),
         ModelSpec("openai/whisper-large-v2", "whisper_large_v2_encoded", 50257),
@@ -398,7 +397,7 @@ struct TokenizerTests {
     /// Some Llama tokenizers already use a bos-prepending Template post-processor
     @Test
     func llamaPostProcessor() async throws {
-        let modelDirectory = try await downloadModel("coreml-projects/Llama-2-7b-chat-coreml")
+        let modelDirectory = try await downloadModel("enterprise-explorers/Llama-2-7b-chat-coreml")
         let tokenizerOpt = try await AutoTokenizer.from(directory: modelDirectory) as? PreTrainedTokenizer
         #expect(tokenizerOpt != nil)
         let tokenizer = tokenizerOpt!

@@ -12,14 +12,17 @@ private let downloadDestination: URL = {
     return base.appending(component: "huggingface-factory-tests")
 }()
 
-private let hubClient = HubClient()
+private let hubClient = HFClient.default
 private let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "config.json"]
 
-private func downloadModel(_ model: Repo.ID) async throws -> URL {
-    try await hubClient.downloadSnapshot(
-        of: model,
-        matching: tokenizerFiles,
-        to: downloadDestination.appending(path: "\(model)")
+private func downloadModel(_ model: String) async throws -> URL {
+    guard let repoID = RepositoryID(model) else {
+        struct InvalidRepoID: Error { let name: String }
+        throw InvalidRepoID(name: model)
+    }
+    return try await hubClient.model(repoID).snapshotDownload(
+        allowPatterns: tokenizerFiles,
+        localDir: downloadDestination.appending(path: model)
     )
 }
 
@@ -27,7 +30,7 @@ private func downloadModel(_ model: Repo.ID) async throws -> URL {
 struct FactoryTests {
     @Test
     func llama() async throws {
-        let modelDirectory = try await downloadModel("coreml-projects/Llama-2-7b-chat-coreml")
+        let modelDirectory = try await downloadModel("enterprise-explorers/Llama-2-7b-chat-coreml")
 
         let tokenizer = try await AutoTokenizer.from(directory: modelDirectory)
         let inputIds = try tokenizer("Today she took a train to the West")
