@@ -32,7 +32,7 @@ if [[ ! -f "${TOOLCHAIN_FILE}" ]]; then
   exit 1
 fi
 
-TOOLCHAIN="$(awk -F'"' '/^channel/ {print $2; exit}' "${TOOLCHAIN_FILE}")"
+TOOLCHAIN="$(awk -F'"' '/^[[:space:]]*channel[[:space:]]*=/ {print $2; exit}' "${TOOLCHAIN_FILE}")"
 if [[ -z "${TOOLCHAIN}" ]]; then
   echo "Failed to parse toolchain channel from ${TOOLCHAIN_FILE}." >&2
   exit 1
@@ -67,6 +67,66 @@ done
 # artifactbundle.sh` without macOS being in the loop.
 bash "${SCRIPT_DIR}/build-uniffi-bindings.sh"
 
+# Localize every global symbol except the UniFFI C surface (uniffi_* / ffi_*).
+# Rust staticlibs export Rust runtime symbols (rust_eh_personality,
+# std::panicking::EMPTY_PANIC) as globals, so two Rust staticlibs in one
+# binary collide with duplicate-symbol link errors. Merging the archive into
+# one relocatable object binds cross-member references internally; objcopy
+# then demotes the non-FFI globals to locals.
+localize_archive_symbols() {
+  echo "Localizing non-FFI symbols in $1..."
+  local archive="$1" ld_tool="$2" nm_tool="$3" objcopy_tool="$4" ar_tool="$5"
+  echo "  using: ${ld_tool} ($("${ld_tool}" --version | head -1)), ${objcopy_tool}"
+  local workdir
+  workdir="$(mktemp -d)"
+  (
+    cd "${workdir}"
+    "${ar_tool}" x "${archive}"
+    # Fat LTO leaves embedded bitcode (.llvmbc/.llvmcmd) in the members.
+    # GNU ld auto-loads the LLVM gold plugin when it sees bitcode sections,
+    # and a plugin older than the bitcode's producer crashes with
+    # "LLVM ERROR: Invalid encoding". The bitcode is only useful for further
+    # LTO, so strip it before merging; this also shrinks the shipped archive.
+    for obj in ./*.o; do
+      "${objcopy_tool}" --remove-section=.llvmbc --remove-section=.llvmcmd "${obj}"
+    done
+    "${ld_tool}" -r ./*.o -o merged.o
+    "${nm_tool}" -g --defined-only merged.o | awk '{print $3}' | grep -E '^(uniffi|ffi)_' | sort -u > keep.txt
+    local kept
+    kept="$(wc -l < keep.txt | tr -d ' ')"
+    # The full UniFFI surface is ~83 symbols; a much smaller count means the
+    # keep-list extraction broke and localization would strip the public API.
+    if [[ "${kept}" -lt 50 ]]; then
+      echo "Symbol localization for ${archive} would keep only ${kept} FFI symbols; aborting." >&2
+      exit 1
+    fi
+    "${objcopy_tool}" --keep-global-symbols=keep.txt merged.o
+    rm -f "${archive}"
+    "${ar_tool}" rcs "${archive}" merged.o
+  )
+  rm -rf "${workdir}"
+}
+
+for target in "${TARGETS[@]}"; do
+  archive="${CRATE_DIR}/target/${target}/release/libtokenizers_rust.a"
+  case "${target}" in
+    x86_64-unknown-linux-gnu)
+      localize_archive_symbols "${archive}" /usr/bin/ld /usr/bin/nm /usr/bin/objcopy /usr/bin/ar
+      ;;
+    aarch64-unknown-linux-gnu)
+      localize_archive_symbols "${archive}" /usr/bin/aarch64-linux-gnu-ld /usr/bin/aarch64-linux-gnu-nm /usr/bin/aarch64-linux-gnu-objcopy /usr/bin/aarch64-linux-gnu-ar
+      ;;
+    *)
+      echo "No symbol-localization toolchain mapping for ${target}." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "${LINUX_OUT}" != *"/rust/target/linux-build" ]]; then
+  echo "Refusing to rm LINUX_OUT=${LINUX_OUT}: does not end with /rust/target/linux-build." >&2
+  exit 1
+fi
 rm -rf "${LINUX_OUT}"
 mkdir -p "${LINUX_OUT}/include"
 cp "${UNIFFI_BINDINGS_DIR}/TokenizersRust.h" "${LINUX_OUT}/include/TokenizersRust.h"
