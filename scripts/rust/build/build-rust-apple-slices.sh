@@ -157,9 +157,13 @@ smoke_test_link() {
     contract_sym="$(nm -gU "${archive}" | awk '{print $3}' | grep '_uniffi_contract_version$')"
     printf 'extern unsigned int %s(void);\nint main(void) { return 0 * (int)%s(); }\n' \
       "${contract_sym#_}" "${contract_sym#_}" > smoke.c
-    # CoreFoundation: serde_json's timezone path references CF symbols. Swift
-    # consumers link CoreFoundation implicitly; a plain C link does not.
-    clang -arch "${arch}" smoke.c "${archive}" -o smoke.bin -framework CoreFoundation
+    # The explicit -target pins the platform: the exported
+    # IPHONEOS_DEPLOYMENT_TARGET otherwise makes clang infer iOS and refuse
+    # the macOS slice. CoreFoundation: serde_json's timezone path references
+    # CF symbols; Swift consumers link CoreFoundation implicitly, a plain C
+    # link does not.
+    clang -target "${arch}-apple-macos${MACOSX_DEPLOYMENT_TARGET}" \
+      smoke.c "${archive}" -o smoke.bin -framework CoreFoundation
   )
   rm -rf "${workdir}"
 }
