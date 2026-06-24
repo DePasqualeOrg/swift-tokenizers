@@ -28,7 +28,7 @@ jobs:
                       xcode: "26.5"
         runs-on: ${{ matrix.os }}
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - uses: ./.github/actions/select-xcode
               with:
                   version: ${{ matrix.xcode }}
@@ -52,7 +52,7 @@ jobs:
         name: Test (Rust built from source)
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - uses: ./.github/actions/select-xcode
 
@@ -127,7 +127,7 @@ jobs:
                 # behave the same as on a regular Linux runner.
                 shell: bash
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Read Rust toolchain version
               id: rust-toolchain
@@ -178,7 +178,7 @@ jobs:
         outputs:
             should-run: ${{ steps.filter.outputs.relevant }}
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - id: filter
               uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -207,7 +207,7 @@ jobs:
             github.event_name != 'pull_request'
             || needs.wrapper-drift-changes.outputs.should-run == 'true'
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - uses: ./.github/actions/select-xcode
 
@@ -230,7 +230,7 @@ jobs:
         name: Documentation
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - uses: ./.github/actions/select-xcode
 
@@ -241,7 +241,7 @@ jobs:
         name: Lint
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - uses: ./.github/actions/select-xcode
 
@@ -260,7 +260,7 @@ jobs:
         name: Rust pin guard
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Check Rust source hash against rust/Pin.json
               run: bash scripts/rust/release/check-pin.sh
