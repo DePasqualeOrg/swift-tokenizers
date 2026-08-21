@@ -33,6 +33,12 @@ The wrapper goes through one post-bindgen step: `regenerate-wrapper.sh` and `che
 
 The `[patch.crates-io]` block in `rust/Cargo.toml` pins a uniffi-rs fork that adds two Swift bindgen visibility options, `implementation_only_ffi_module_import` and `internal_ffi_converter_helpers`. `rust/uniffi.toml` sets both, which keeps the lower-level Rust FFI module and its converter helpers out of the generated wrapper's public Swift interface. The pinned revision must stay identical to swift-hf-api's: both packages patch the same crates, and a mismatch means the two artifactbundles are built against different bindgen behavior. **TODO:** drop the block and use the plain `uniffi` dependency once these options ship in a uniffi-rs release.
 
+## The `tokenizers` 0.22 hold
+
+The `tokenizers` crate is deliberately held at 0.22. Versions 0.23.0–0.23.1 do not skip an added token declared with both `special: true` and `normalized: true` when decoding with `skip_special_tokens=true`, so Llama-2's `<s>` (and any similarly declared special token) leaks into decoded chat text. The root cause is upstream [PR #1995](https://github.com/huggingface/tokenizers/pull/1995): it stores the normalized form of `normalized: true` added tokens and returns it from `simple_id_to_token`, but `decode` checks that normalized string against `special_tokens_set`, which holds the original contents — membership fails and the token is kept. `is_special_token()` still answers correctly for the original spelling, so registration-level checks will not catch it; only a decode round trip does.
+
+**Before bumping past 0.22:** verify the fix landed upstream (watch the `decode` path in `tokenizer/mod.rs` and `simple_id_to_token` in `tokenizer/added_vocabulary.rs`), then run the full Swift test suite — the Llama-2 edge cases in `Tests/TokenizersTests` (`enterprise-explorers/Llama-2-7b-chat-coreml`) pin the correct behavior and are the regression's canary; the crate's own unit tests and a clean build both stayed green while 19 assertions failed there. As of 2026-08-21 the regression was **not reported upstream**; do not assume a later release fixed it without re-checking. Do not work around it in a fork by forcing `normalized: false` — that changes what the token matches during encoding.
+
 ## Overview of `rust-release.yml`
 
 The workflow is split into four jobs to keep the cross-platform builds independent and the write boundary tight:
