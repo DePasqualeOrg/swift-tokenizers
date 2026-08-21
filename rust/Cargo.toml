@@ -22,16 +22,13 @@ regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-# Held at 0.22: tokenizers 0.23.x regressed `decode(skip_special_tokens=true)`
+# Held at 0.22: tokenizers 0.23.1 regressed `decode(skip_special_tokens=true)`
 # for added tokens declared with both `special: true` and `normalized: true`
 # (e.g. Llama-2's `<s>`), which are no longer skipped and leak into decoded
-# text. Root cause is upstream PR #1995 (normalized token content is returned
-# from `simple_id_to_token`, but `decode` checks it against a set of original
-# contents). Unreported upstream as of 2026-08-21. See "The `tokenizers` 0.22
-# hold" in docs/rust-release.md for the verification steps before bumping.
+# text. Reproduced against 0.22.2/0.23.1 with a standalone program; the
+# Llama-2 edge cases in Tests/TokenizersTests pin the correct behavior.
 # TODO: bump once a tokenizers release restores skipping for
-# normalized special tokens, verified by the Llama-2 edge cases in
-# Tests/TokenizersTests.
+# normalized special tokens.
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 uniffi = { version = "0.32", default-features = false }
 
