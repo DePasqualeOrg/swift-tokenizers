@@ -40,6 +40,52 @@ fileprivate extension ForeignBytes {
     init(bufferPointer: UnsafeBufferPointer<UInt8>) {
         self.init(len: Int32(bufferPointer.count), data: bufferPointer.baseAddress)
     }
+
+    init(rawBufferPointer: UnsafeRawBufferPointer) {
+        self.init(
+            len: Int32(rawBufferPointer.count),
+            data: rawBufferPointer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+        )
+    }
+}
+
+// Converter for `&[u8]` / `[ByRef] bytes` arguments.
+//
+// Conforms to `FfiConverter` so the compiler enforces the full converter
+// method set. Only the scope-bound `lower(_:_body:)` overload is sound —
+// zero-copy byte buffers only flow foreign -> Rust, and only in argument
+// position. The four protocol-witness methods (`lift`, `lower`, `read`,
+// `write`) `fatalError` at runtime if anyone reaches them.
+//
+// The scope-bound `lower` takes a closure because the `ForeignBytes`
+// pointer is only guaranteed valid for the duration of
+// `Data.withUnsafeBytes`. Callers must run the full FFI call inside
+// the closure body.
+fileprivate enum FfiConverterByRefBytes: FfiConverter {
+    typealias SwiftType = Data
+    typealias FfiType = ForeignBytes
+
+    static func lower<R>(_ value: Data, _ body: (ForeignBytes) throws -> R) rethrows -> R {
+        return try value.withUnsafeBytes { rawBuf in
+            try body(ForeignBytes(rawBufferPointer: rawBuf))
+        }
+    }
+
+    static func lower(_ value: Data) -> ForeignBytes {
+        fatalError("ByRef bytes cannot use the plain lower: returning ForeignBytes escapes the Data.withUnsafeBytes scope. Use the scope-bound lower(_:_body:) overload instead.")
+    }
+
+    static func lift(_ value: ForeignBytes) throws -> Data {
+        fatalError("ByRef bytes cannot be lifted: zero-copy &[u8] only flows foreign->Rust")
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        fatalError("ByRef bytes cannot be read from a buffer: zero-copy &[u8] is only supported in argument position, not nested in records/options/etc.")
+    }
+
+    static func write(_ value: Data, into buf: inout [UInt8]) {
+        fatalError("ByRef bytes cannot be written to a buffer: zero-copy &[u8] is only supported in argument position, not nested in records/options/etc.")
+    }
 }
 
 // For every type used in the interface, we provide helper methods for conveniently
@@ -612,8 +658,9 @@ open class Tokenizer: TokenizerProtocol, @unchecked Sendable {
      */
 public static func fromDirectory(directoryPath: String)throws  -> Tokenizer  {
     return try  FfiConverterTypeTokenizer_lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_constructor_tokenizer_from_directory(
-        FfiConverterString.lower(directoryPath),$0
+        FfiConverterString.lower(directoryPath),uniffiCallStatus
     )
 })
 }
@@ -626,9 +673,10 @@ public static func fromDirectory(directoryPath: String)throws  -> Tokenizer  {
      */
 public static func fromDirectoryWithRuntimeConfiguration(directoryPath: String, runtimeConfiguration: RuntimeConfiguration)throws  -> Tokenizer  {
     return try  FfiConverterTypeTokenizer_lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_constructor_tokenizer_from_directory_with_runtime_configuration(
         FfiConverterString.lower(directoryPath),
-        FfiConverterTypeRuntimeConfiguration_lower(runtimeConfiguration),$0
+        FfiConverterTypeRuntimeConfiguration_lower(runtimeConfiguration),uniffiCallStatus
     )
 })
 }
@@ -643,40 +691,44 @@ public static func fromDirectoryWithRuntimeConfiguration(directoryPath: String, 
      */
 open func applyChatTemplate(template: String, contextJson: String, truncation: Bool, maxLength: UInt64?)throws  -> [Int32]  {
     return try  FfiConverterSequenceInt32.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_apply_chat_template(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(template),
         FfiConverterString.lower(contextJson),
         FfiConverterBool.lower(truncation),
-        FfiConverterOptionUInt64.lower(maxLength),$0
+        FfiConverterOptionUInt64.lower(maxLength),uniffiCallStatus
     )
 })
 }
     
 open func convertIdToToken(tokenId: Int32) -> String?  {
     return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_convert_id_to_token(
             self.uniffiCloneHandle(),
-        FfiConverterInt32.lower(tokenId),$0
+        FfiConverterInt32.lower(tokenId),uniffiCallStatus
     )
 })
 }
     
 open func convertTokenToId(token: String) -> Int32?  {
     return try!  FfiConverterOptionInt32.lift(try! rustCall() {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_convert_token_to_id(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(token),$0
+        FfiConverterString.lower(token),uniffiCallStatus
     )
 })
 }
     
 open func decode(tokenIds: [Int32], skipSpecialTokens: Bool)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_decode(
             self.uniffiCloneHandle(),
         FfiConverterSequenceInt32.lower(tokenIds),
-        FfiConverterBool.lower(skipSpecialTokens),$0
+        FfiConverterBool.lower(skipSpecialTokens),uniffiCallStatus
     )
 })
 }
@@ -686,61 +738,67 @@ open func decode(tokenIds: [Int32], skipSpecialTokens: Bool)throws  -> String  {
      */
 open func descriptor()throws  -> TokenizerDescriptor  {
     return try  FfiConverterTypeTokenizerDescriptor_lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_descriptor(
-            self.uniffiCloneHandle(),$0
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
     
 open func encode(text: String, textPair: String?, addSpecialTokens: Bool)throws  -> [Int32]  {
     return try  FfiConverterSequenceInt32.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_encode(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(text),
         FfiConverterOptionString.lower(textPair),
-        FfiConverterBool.lower(addSpecialTokens),$0
+        FfiConverterBool.lower(addSpecialTokens),uniffiCallStatus
     )
 })
 }
     
 open func encodeBatch(inputs: [EncodeInput], addSpecialTokens: Bool)throws  -> [[Int32]]  {
     return try  FfiConverterSequenceSequenceInt32.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_encode_batch(
             self.uniffiCloneHandle(),
         FfiConverterSequenceTypeEncodeInput.lower(inputs),
-        FfiConverterBool.lower(addSpecialTokens),$0
+        FfiConverterBool.lower(addSpecialTokens),uniffiCallStatus
     )
 })
 }
     
 open func encodeBatchWithMetadata(inputs: [EncodeInput], addSpecialTokens: Bool, offsetUnit: OffsetUnit)throws  -> [Encoding]  {
     return try  FfiConverterSequenceTypeEncoding.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_encode_batch_with_metadata(
             self.uniffiCloneHandle(),
         FfiConverterSequenceTypeEncodeInput.lower(inputs),
         FfiConverterBool.lower(addSpecialTokens),
-        FfiConverterTypeOffsetUnit_lower(offsetUnit),$0
+        FfiConverterTypeOffsetUnit_lower(offsetUnit),uniffiCallStatus
     )
 })
 }
     
 open func encodeWithMetadata(text: String, textPair: String?, addSpecialTokens: Bool, offsetUnit: OffsetUnit)throws  -> Encoding  {
     return try  FfiConverterTypeEncoding_lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_encode_with_metadata(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(text),
         FfiConverterOptionString.lower(textPair),
         FfiConverterBool.lower(addSpecialTokens),
-        FfiConverterTypeOffsetUnit_lower(offsetUnit),$0
+        FfiConverterTypeOffsetUnit_lower(offsetUnit),uniffiCallStatus
     )
 })
 }
     
 open func tokenize(text: String)throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_method_tokenizer_tokenize(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(text),$0
+        FfiConverterString.lower(text),uniffiCallStatus
     )
 })
 }
@@ -1850,8 +1908,9 @@ fileprivate struct FfiConverterSequenceSequenceInt32: FfiConverterRustBuffer {
  */
 public func loadRuntimeConfiguration(directoryPath: String)throws  -> RuntimeConfiguration  {
     return try  FfiConverterTypeRuntimeConfiguration_lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_func_load_runtime_configuration(
-        FfiConverterString.lower(directoryPath),$0
+        FfiConverterString.lower(directoryPath),uniffiCallStatus
     )
 })
 }
@@ -1861,9 +1920,10 @@ public func loadRuntimeConfiguration(directoryPath: String)throws  -> RuntimeCon
  */
 public func renderTemplate(template: String, contextJson: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeTokenizerError_lift) {
+        uniffiCallStatus in
     uniffi_tokenizers_rust_fn_func_render_template(
         FfiConverterString.lower(template),
-        FfiConverterString.lower(contextJson),$0
+        FfiConverterString.lower(contextJson),uniffiCallStatus
     )
 })
 }
@@ -1883,46 +1943,46 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_func_load_runtime_configuration() != 42272) {
+    if (uniffi_tokenizers_rust_checksum_func_load_runtime_configuration() != 32094) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_func_render_template() != 2083) {
+    if (uniffi_tokenizers_rust_checksum_func_render_template() != 14454) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_apply_chat_template() != 31197) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_apply_chat_template() != 44594) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_id_to_token() != 39654) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_id_to_token() != 16921) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_token_to_id() != 22026) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_token_to_id() != 2283) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_decode() != 19657) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_decode() != 35722) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_descriptor() != 5775) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_descriptor() != 16135) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode() != 27244) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode() != 40506) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch() != 27094) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch() != 22039) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch_with_metadata() != 14080) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch_with_metadata() != 43508) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_with_metadata() != 23325) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_with_metadata() != 58122) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_tokenize() != 23205) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_tokenize() != 36961) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory() != 15989) {
+    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory() != 31313) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory_with_runtime_configuration() != 17481) {
+    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory_with_runtime_configuration() != 36470) {
         return InitializationResult.apiChecksumMismatch
     }
 

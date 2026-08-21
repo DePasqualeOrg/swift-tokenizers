@@ -8,9 +8,9 @@ import PackageDescription
 // dependency consumers (both `Context.packageDirectory` and `#filePath` return
 // synthetic paths during dep evaluation).
 let tokenizersRustArtifactBundleURL =
-    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.7.1/TokenizersRust-0.7.1.artifactbundle.zip"
+    "https://github.com/DePasqualeOrg/swift-tokenizers/releases/download/tokenizers-rust-0.7.2/TokenizersRust-0.7.2.artifactbundle.zip"
 let tokenizersRustArtifactBundleChecksum =
-    "2609bf604808798a07c84fbb7e51ea684ffe73a26080cbb24d60dd2d9f73f943"
+    "9599101caf0cdb13a84c965e04e38b9af293d2eedaf577111d26cfd7f312abbc"
 
 let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
 let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH"]
