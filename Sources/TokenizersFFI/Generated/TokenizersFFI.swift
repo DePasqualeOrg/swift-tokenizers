@@ -234,7 +234,11 @@ extension FfiConverterPrimitive {
 
 // Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
 // Used for complex types where it's hard to write a custom lift/lower.
-fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
+//
+// Conformers declare `typealias FfiType = RustBuffer` rather than inheriting a
+// `where FfiType == RustBuffer` constraint from the protocol: a requirement signature that names
+// `RustBuffer` is rejected when the FFI module is imported `@_implementationOnly`.
+fileprivate protocol FfiConverterRustBuffer: FfiConverter {}
 
 extension FfiConverterRustBuffer {
 #if swift(>=5.8)
@@ -879,6 +883,8 @@ extension EncodeInput: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeEncodeInput: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncodeInput {
         return
             try EncodeInput(
@@ -945,6 +951,8 @@ extension Encoding: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeEncoding: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Encoding {
         return
             try Encoding(
@@ -1019,6 +1027,8 @@ extension EncodingMetadata: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeEncodingMetadata: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncodingMetadata {
         return
             try EncodingMetadata(
@@ -1089,6 +1099,8 @@ extension NamedChatTemplate: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeNamedChatTemplate: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NamedChatTemplate {
         return
             try NamedChatTemplate(
@@ -1147,6 +1159,8 @@ extension OffsetSpan: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeOffsetSpan: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OffsetSpan {
         return
             try OffsetSpan(
@@ -1223,6 +1237,8 @@ extension RuntimeConfiguration: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeRuntimeConfiguration: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeConfiguration {
         return
             try RuntimeConfiguration(
@@ -1308,6 +1324,8 @@ extension TokenizerDescriptor: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeTokenizerDescriptor: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
+
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenizerDescriptor {
         return
             try TokenizerDescriptor(
@@ -1373,6 +1391,7 @@ extension ChatTemplateSource: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeChatTemplateSource: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = ChatTemplateSource
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatTemplateSource {
@@ -1454,6 +1473,7 @@ extension OffsetUnit: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeOffsetUnit: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = OffsetUnit
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OffsetUnit {
@@ -1538,6 +1558,7 @@ extension TokenizerError: Sendable {}
 @_documentation(visibility: private)
 #endif
 struct FfiConverterTypeTokenizerError: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = TokenizerError
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenizerError {
@@ -1610,6 +1631,7 @@ func FfiConverterTypeTokenizerError_lower(_ value: TokenizerError) -> RustBuffer
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterOptionInt32: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = Int32?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
@@ -1634,6 +1656,7 @@ fileprivate struct FfiConverterOptionInt32: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = UInt64?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
@@ -1658,6 +1681,7 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = String?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
@@ -1682,6 +1706,7 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceInt32: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [Int32]
 
     public static func write(_ value: [Int32], into buf: inout [UInt8]) {
@@ -1707,6 +1732,7 @@ fileprivate struct FfiConverterSequenceInt32: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [String]
 
     public static func write(_ value: [String], into buf: inout [UInt8]) {
@@ -1732,6 +1758,7 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceTypeEncodeInput: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [EncodeInput]
 
     public static func write(_ value: [EncodeInput], into buf: inout [UInt8]) {
@@ -1757,6 +1784,7 @@ fileprivate struct FfiConverterSequenceTypeEncodeInput: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceTypeEncoding: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [Encoding]
 
     public static func write(_ value: [Encoding], into buf: inout [UInt8]) {
@@ -1782,6 +1810,7 @@ fileprivate struct FfiConverterSequenceTypeEncoding: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceTypeEncodingMetadata: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [EncodingMetadata]
 
     public static func write(_ value: [EncodingMetadata], into buf: inout [UInt8]) {
@@ -1807,6 +1836,7 @@ fileprivate struct FfiConverterSequenceTypeEncodingMetadata: FfiConverterRustBuf
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceTypeNamedChatTemplate: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [NamedChatTemplate]
 
     public static func write(_ value: [NamedChatTemplate], into buf: inout [UInt8]) {
@@ -1832,6 +1862,7 @@ fileprivate struct FfiConverterSequenceTypeNamedChatTemplate: FfiConverterRustBu
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceTypeOffsetSpan: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [OffsetSpan]
 
     public static func write(_ value: [OffsetSpan], into buf: inout [UInt8]) {
@@ -1857,6 +1888,7 @@ fileprivate struct FfiConverterSequenceTypeOffsetSpan: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceOptionInt32: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [Int32?]
 
     public static func write(_ value: [Int32?], into buf: inout [UInt8]) {
@@ -1882,6 +1914,7 @@ fileprivate struct FfiConverterSequenceOptionInt32: FfiConverterRustBuffer {
 @_documentation(visibility: private)
 #endif
 fileprivate struct FfiConverterSequenceSequenceInt32: FfiConverterRustBuffer {
+    typealias FfiType = RustBuffer
     typealias SwiftType = [[Int32]]
 
     public static func write(_ value: [[Int32]], into buf: inout [UInt8]) {

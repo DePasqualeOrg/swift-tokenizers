@@ -58,6 +58,15 @@ let tokenizersRustTarget: Target =
         )
     }
 
+// The generated wrapper imports the `TokenizersRust` C module `@_implementationOnly`. Without library
+// evolution that is only sound while no C type contributes to the layout of a type clients can
+// see; `CheckImplementationOnly` makes the compiler enforce it. Swift 6.4 introduced the check and
+// deprecated the unchecked form.
+var tokenizersFFISwiftSettings: [SwiftSetting] = []
+#if compiler(>=6.4)
+tokenizersFFISwiftSettings.append(.enableExperimentalFeature("CheckImplementationOnly"))
+#endif
+
 var packageTargets: [Target] = [
     tokenizersRustTarget,
     // Holds the UniFFI-generated Swift wrapper. Not in `products` — its public
@@ -87,6 +96,7 @@ var packageTargets: [Target] = [
         ],
         path: "Sources/TokenizersFFI",
         resources: [.process("Resources")],
+        swiftSettings: tokenizersFFISwiftSettings,
         linkerSettings: ["dl", "pthread", "m", "rt", "util", "gcc_s"].map {
             .linkedLibrary($0, .when(platforms: [.linux]))
         }
