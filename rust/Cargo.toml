@@ -30,7 +30,10 @@ thiserror = "2.0"
 # TODO: bump once a tokenizers release restores skipping for
 # normalized special tokens.
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
-uniffi = { version = "0.32", default-features = false }
+# `macro-scaffolding` is a uniffi default feature (since 0.32.2) that makes the
+# export macros emit the Rust scaffolding; `default-features = false` must
+# re-enable it or every exported item compiles to dead code.
+uniffi = { version = "0.32", default-features = false, features = ["macro-scaffolding"] }
 
 [features]
 # Enables the `uniffi-bindgen-swift` binary entry point. Activates `cargo-metadata`
@@ -59,11 +62,11 @@ strip = "none"
 # TODO: drop this entire `[patch.crates-io]` block and use plain `uniffi` once
 # the visibility options are included in a uniffi-rs release.
 [patch.crates-io]
-uniffi = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_bindgen = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_core = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_meta = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_pipeline = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_udl = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
-uniffi_internal_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "50a87b4319797e875a39238512cd6815abcb1064" }
+uniffi = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_bindgen = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_core = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_meta = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_pipeline = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_udl = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }
+uniffi_internal_macros = { git = "https://github.com/DePasqualeOrg/uniffi-rs.git", rev = "4412e46aed39ac912949c1d4925ffeba27af89bd" }

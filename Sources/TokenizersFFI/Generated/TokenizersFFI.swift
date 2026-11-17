@@ -47,6 +47,13 @@ fileprivate extension ForeignBytes {
             data: rawBufferPointer.baseAddress?.assumingMemoryBound(to: UInt8.self)
         )
     }
+
+    init(mutableRawBufferPointer: UnsafeMutableRawBufferPointer) {
+        self.init(
+            len: Int32(mutableRawBufferPointer.count),
+            data: mutableRawBufferPointer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+        )
+    }
 }
 
 // Converter for `&[u8]` / `[ByRef] bytes` arguments.
@@ -85,6 +92,21 @@ fileprivate enum FfiConverterByRefBytes: FfiConverter {
 
     static func write(_ value: Data, into buf: inout [UInt8]) {
         fatalError("ByRef bytes cannot be written to a buffer: zero-copy &[u8] is only supported in argument position, not nested in records/options/etc.")
+    }
+}
+
+// Converter for `&mut [u8]` / `[ByMutRef] bytes` arguments.
+//
+// Zero-copy and foreign -> Rust only, like `FfiConverterByRefBytes`, but the
+// buffer is writable: Rust's writes through the pointer land directly in the
+// caller's `Data`. The scope-bound `lower(_:_body:)` takes the `Data` `inout`
+// and runs the full FFI call inside `withUnsafeMutableBytes`, whose pointer is
+// only valid for the closure's duration.
+fileprivate enum FfiConverterByMutRefBytes {
+    static func lower<R>(_ value: inout Data, _ body: (ForeignBytes) throws -> R) rethrows -> R {
+        return try value.withUnsafeMutableBytes { rawBuf in
+            try body(ForeignBytes(mutableRawBufferPointer: rawBuf))
+        }
     }
 }
 
@@ -848,7 +870,7 @@ func FfiConverterTypeTokenizer_lift(_ handle: UInt64) throws -> Tokenizer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeTokenizer_lower(_ value: Tokenizer) -> UInt64 {
+@Sendable func FfiConverterTypeTokenizer_lower(_ value: Tokenizer) -> UInt64 {
     return FfiConverterTypeTokenizer.lower(value)
 }
 
@@ -910,7 +932,7 @@ func FfiConverterTypeEncodeInput_lift(_ buf: RustBuffer) throws -> EncodeInput {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeEncodeInput_lower(_ value: EncodeInput) -> RustBuffer {
+@Sendable func FfiConverterTypeEncodeInput_lower(_ value: EncodeInput) -> RustBuffer {
     return FfiConverterTypeEncodeInput.lower(value)
 }
 
@@ -978,7 +1000,7 @@ func FfiConverterTypeEncoding_lift(_ buf: RustBuffer) throws -> Encoding {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeEncoding_lower(_ value: Encoding) -> RustBuffer {
+@Sendable func FfiConverterTypeEncoding_lower(_ value: Encoding) -> RustBuffer {
     return FfiConverterTypeEncoding.lower(value)
 }
 
@@ -1070,7 +1092,7 @@ func FfiConverterTypeEncodingMetadata_lift(_ buf: RustBuffer) throws -> Encoding
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeEncodingMetadata_lower(_ value: EncodingMetadata) -> RustBuffer {
+@Sendable func FfiConverterTypeEncodingMetadata_lower(_ value: EncodingMetadata) -> RustBuffer {
     return FfiConverterTypeEncodingMetadata.lower(value)
 }
 
@@ -1126,7 +1148,7 @@ func FfiConverterTypeNamedChatTemplate_lift(_ buf: RustBuffer) throws -> NamedCh
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeNamedChatTemplate_lower(_ value: NamedChatTemplate) -> RustBuffer {
+@Sendable func FfiConverterTypeNamedChatTemplate_lower(_ value: NamedChatTemplate) -> RustBuffer {
     return FfiConverterTypeNamedChatTemplate.lower(value)
 }
 
@@ -1186,7 +1208,7 @@ func FfiConverterTypeOffsetSpan_lift(_ buf: RustBuffer) throws -> OffsetSpan {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeOffsetSpan_lower(_ value: OffsetSpan) -> RustBuffer {
+@Sendable func FfiConverterTypeOffsetSpan_lower(_ value: OffsetSpan) -> RustBuffer {
     return FfiConverterTypeOffsetSpan.lower(value)
 }
 
@@ -1282,7 +1304,7 @@ func FfiConverterTypeRuntimeConfiguration_lift(_ buf: RustBuffer) throws -> Runt
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeRuntimeConfiguration_lower(_ value: RuntimeConfiguration) -> RustBuffer {
+@Sendable func FfiConverterTypeRuntimeConfiguration_lower(_ value: RuntimeConfiguration) -> RustBuffer {
     return FfiConverterTypeRuntimeConfiguration.lower(value)
 }
 
@@ -1359,7 +1381,7 @@ func FfiConverterTypeTokenizerDescriptor_lift(_ buf: RustBuffer) throws -> Token
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeTokenizerDescriptor_lower(_ value: TokenizerDescriptor) -> RustBuffer {
+@Sendable func FfiConverterTypeTokenizerDescriptor_lower(_ value: TokenizerDescriptor) -> RustBuffer {
     return FfiConverterTypeTokenizerDescriptor.lower(value)
 }
 
@@ -1442,7 +1464,7 @@ func FfiConverterTypeChatTemplateSource_lift(_ buf: RustBuffer) throws -> ChatTe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeChatTemplateSource_lower(_ value: ChatTemplateSource) -> RustBuffer {
+@Sendable func FfiConverterTypeChatTemplateSource_lower(_ value: ChatTemplateSource) -> RustBuffer {
     return FfiConverterTypeChatTemplateSource.lower(value)
 }
 
@@ -1514,7 +1536,7 @@ func FfiConverterTypeOffsetUnit_lift(_ buf: RustBuffer) throws -> OffsetUnit {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeOffsetUnit_lower(_ value: OffsetUnit) -> RustBuffer {
+@Sendable func FfiConverterTypeOffsetUnit_lower(_ value: OffsetUnit) -> RustBuffer {
     return FfiConverterTypeOffsetUnit.lower(value)
 }
 
@@ -1623,7 +1645,7 @@ func FfiConverterTypeTokenizerError_lift(_ buf: RustBuffer) throws -> TokenizerE
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-func FfiConverterTypeTokenizerError_lower(_ value: TokenizerError) -> RustBuffer {
+@Sendable func FfiConverterTypeTokenizerError_lower(_ value: TokenizerError) -> RustBuffer {
     return FfiConverterTypeTokenizerError.lower(value)
 }
 
@@ -1970,52 +1992,52 @@ private enum InitializationResult {
 // the code inside is only computed once.
 private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
-    let bindings_contract_version = 30
+    let bindings_contract_version = 33
     // Get the scaffolding contract version by calling the into the dylib
     let scaffolding_contract_version = ffi_tokenizers_rust_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_func_load_runtime_configuration() != 32094) {
+    if (uniffi_tokenizers_rust_checksum_func_load_runtime_configuration() != 23874) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_func_render_template() != 14454) {
+    if (uniffi_tokenizers_rust_checksum_func_render_template() != 41686) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_apply_chat_template() != 44594) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_apply_chat_template() != 15554) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_id_to_token() != 16921) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_id_to_token() != 48129) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_token_to_id() != 2283) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_convert_token_to_id() != 34652) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_decode() != 35722) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_decode() != 24261) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_descriptor() != 16135) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_descriptor() != 17104) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode() != 40506) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode() != 34972) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch() != 22039) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch() != 37616) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch_with_metadata() != 43508) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_batch_with_metadata() != 3473) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_with_metadata() != 58122) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_encode_with_metadata() != 25369) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_method_tokenizer_tokenize() != 36961) {
+    if (uniffi_tokenizers_rust_checksum_method_tokenizer_tokenize() != 44416) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory() != 31313) {
+    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory() != 10282) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory_with_runtime_configuration() != 36470) {
+    if (uniffi_tokenizers_rust_checksum_constructor_tokenizer_from_directory_with_runtime_configuration() != 9836) {
         return InitializationResult.apiChecksumMismatch
     }
 

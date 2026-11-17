@@ -16,11 +16,10 @@ let docsEnabled = Context.environment["TOKENIZERS_ENABLE_DOCS"] == "1"
 let localRustArtifactPath = Context.environment["TOKENIZERS_RUST_LOCAL_ARTIFACTBUNDLE_PATH"]
 
 var packageDependencies: [Package.Dependency] = [
-    // 0.4.2 is the floor: HubClient became HFClient in 0.4.0, and 0.4.2's
-    // artifactbundle localizes non-FFI Rust globals with a root-driven merge
-    // (0.4.1's Linux x86_64 slice fails consumer links). Minor releases of
-    // swift-hf-api have been API-breaking; bump deliberately.
-    .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", .upToNextMinor(from: "0.4.2"))
+    // 0.4.7 is the floor: its Rust artifact is built from the same uniffi
+    // fork revision as this package's, which both packages must move together.
+    // Minor releases of swift-hf-api have been API-breaking; bump deliberately.
+    .package(url: "https://github.com/DePasqualeOrg/swift-hf-api.git", .upToNextMinor(from: "0.4.7"))
 ]
 
 // The Benchmarks target pulls in mlx-swift-lm, which is macOS-only and
